@@ -6,7 +6,7 @@ async function snapshot(page){return page.evaluate(async()=>await (await import(
 test('mobile real engine gameplay, illegal move rejection, clock, persisted preferences and active game',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
  await page.locator('[data-tab=settings]').click();await page.locator('#theme').selectOption('midnight');await page.locator('[data-tab=play]').click();await clock(page,60);await page.locator('#new-game-form button[type=submit]').click();
- await page.locator('#from').fill('e2');await page.locator('#to').fill('e5');await page.locator('#move-form button').click();await expect(page.locator('#notice')).toContainText('not legal');await expect(page.locator('#moves li')).toHaveCount(0);
+ await page.locator('#manual-move summary').click();await page.locator('#from').fill('e2');await page.locator('#to').fill('e5');await page.locator('#move-form button').click();await expect(page.locator('#notice')).toContainText('not legal');await expect(page.locator('#moves li')).toHaveCount(0);
  await page.locator('[data-square=e2]').click();await page.locator('[data-square=e4]').click();await expect(page.locator('#moves li')).toHaveCount(2,{timeout:25000});
  const before=await snapshot(page);const game=before.games[0];expect(game.moves[0]).toBe('e2e4');expect(game.clock.b).toBeLessThan(60000);expect(game.pgn).toContain('e4');
  await page.reload();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#moves li')).toHaveCount(2);await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');

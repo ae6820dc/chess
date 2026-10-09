@@ -1,3 +1,4 @@
+import {setUnlocked,showGame} from './layout.js';
 import {Chess} from './vendor/chess.js';
 import {StockfishAdapter} from './engine.js';
 import {DEFAULTS,chessFor,newGame,remaining,debit,timeout,play,finish,claimable,pgn,uci} from './core.js';
@@ -74,7 +75,7 @@ async function abandon(){
 }
 async function launch(mode,sequence=[],arena=null){
  closeEngines();selected=null;game=newGame(profile,prefs,mode,sequence);if(arena)game.arena=arena;
- await persist();tab('play');scheduleEngine();
+ await persist();tab('play');showGame();scheduleEngine();
 }
 function scheduleEngine(){
  if(storageBlocked||!game||game.status!=='active'||game.clock.paused||searching)return;
@@ -146,17 +147,17 @@ async function loadOpening(rank=$('opening-rank').value){
 async function renderArchive(){
  const data=await read();$('archive-list').replaceChildren();const games=data.games.filter(g=>g.profileId===profile.id).sort((a,b)=>b.created-a.created);
  if(!games.length){$('archive-list').textContent='Your first game will appear here.';return;}
- for(const g of games){const row=document.createElement('div');row.className='archive-item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=`${g.result} · ${g.reason||'In progress'} · ${g.mode}`;const detail=document.createElement('small');detail.textContent=`${new Date(g.created).toLocaleString()} · ${g.moves.length} plies · stake ${g.stake} × ${g.multiplier} · ${g.difficulty} · ${g.clock.base/60}+${g.clock.increment} · balance ${g.endingBalance??'pending'}`;info.append(title,detail);const actions=document.createElement('div');actions.className='actions';const replay=document.createElement('button');replay.textContent='Replay';replay.onclick=()=>{replayGame=g;replayPly=0;$('replay').hidden=false;renderReplay();$('replay').scrollIntoView({behavior:'smooth'});};const exportBtn=document.createElement('button');exportBtn.textContent='Export PGN';exportBtn.onclick=()=>download(pgn(g),`chess-${g.id}.pgn`,'application/x-chess-pgn');actions.append(replay,exportBtn);row.append(info,actions);$('archive-list').append(row);}
+ for(const g of games){const row=document.createElement('div');row.className='archive-item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=`${g.result} · ${g.reason||'In progress'} · ${g.mode}`;const detail=document.createElement('small');detail.textContent=`${new Date(g.created).toLocaleString()} · ${g.moves.length} plies · stake ${g.stake} × ${g.multiplier} · ${g.difficulty} · ${g.clock.base/60}+${g.clock.increment} · balance ${g.endingBalance??'pending'}`;info.append(title,detail);const actions=document.createElement('div');actions.className='actions';const replay=document.createElement('button');replay.textContent='Replay';replay.onclick=()=>{replayGame=g;replayPly=0;$('replay').showModal();renderReplay();};const exportBtn=document.createElement('button');exportBtn.textContent='Export PGN';exportBtn.onclick=()=>download(pgn(g),`chess-${g.id}.pgn`,'application/x-chess-pgn');actions.append(replay,exportBtn);row.append(info,actions);$('archive-list').append(row);}
 }
 function renderReplay(){boardView($('replay-board'),chessFor(replayGame,replayPly));$('replay-title').textContent=`Replay · ${replayGame.result}`;$('replay-status').textContent=`Ply ${replayPly}/${replayGame.moves.length} · ${chessFor(replayGame,replayPly).history().at(-1)||'Starting position'}`;$('replay-prev').disabled=replayPly===0;$('replay-next').disabled=replayPly===replayGame.moves.length;}
 function download(text,name,type='application/json'){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function unlocked(p){
- profile=p;prefs={...structuredClone(DEFAULTS),...p.prefs};sessionStorage.setItem('chess-profile',p.id);$('auth').hidden=true;$('club').hidden=false;$('logout').hidden=false;applyPrefs();await refreshProfile();
+ profile=p;prefs={...structuredClone(DEFAULTS),...p.prefs};sessionStorage.setItem('chess-profile',p.id);$('auth').hidden=true;$('club').hidden=false;$('logout').hidden=false;setUnlocked(true);applyPrefs();await refreshProfile();
  const data=await read(),games=data.games.filter(g=>g.profileId===p.id).sort((a,b)=>b.created-a.created);game=games.find(g=>g.status==='active')||games.find(g=>g.mode==='arena'&&g.arena?.pending)||games[0]||null;
- renderGame();notice('Profile unlocked · all data stays on this device');
+ renderGame();if(game?.status==='active')showGame();notice('Profile unlocked · all data stays on this device');
  if(game?.status==='active'){if(timeout(game)){await persist();await ended();}else scheduleEngine();}else if(game?.arena?.pending)await nextArena();
 }
-async function lockProfile(){closeEngines();if(game?.status==='active'&&game.mode==='arena'){debit(game);game.clock.paused=true;game.revision++;await persist();}profile=null;game=null;sessionStorage.removeItem('chess-profile');$('club').hidden=true;$('logout').hidden=true;await renderAuth();}
+async function lockProfile(){closeEngines();if(game?.status==='active'&&game.mode==='arena'){debit(game);game.clock.paused=true;game.revision++;await persist();}profile=null;game=null;sessionStorage.removeItem('chess-profile');$('club').hidden=true;$('logout').hidden=true;setUnlocked(false);$('replay').close();await renderAuth();}
 async function renderAuth(){const data=await read();$('auth').hidden=false;$('profile-select').replaceChildren();for(const p of data.profiles){const option=document.createElement('option');option.value=p.id;option.textContent=p.name;$('profile-select').append(option);}$('login-form').hidden=!data.profiles.length;notice('Local storage ready. Create or unlock a profile.');}
 $('create-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{if(!canWrite)throw Error('Another tab owns local storage');const p=await createProfile($('profile-name').value,$('create-password').value);$('create-password').value='';await unlocked(p);});};
 $('login-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const data=await read(),p=data.profiles.find(p=>p.id===$('profile-select').value);await authenticate(p,$('login-password').value);$('login-password').value='';await unlocked(p);});};
@@ -175,7 +176,7 @@ $('multiplier-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const mul
 $('opening-jump').onclick=()=>enqueue(()=>loadOpening());$('opening-prev').onclick=()=>enqueue(()=>loadOpening((BigInt($('opening-rank').value)-1n).toString()));$('opening-next').onclick=()=>enqueue(()=>loadOpening((BigInt($('opening-rank').value)+1n).toString()));$('opening-cancel').onclick=()=>openingReject?.();$('opening-play').onclick=()=>{tab('play');$('use-opening').checked=true;};
 $('arena-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{await capturePrefs();if(!await abandon())return;const count=Number($('arena-count').value),speed=Number($('arena-speed').value);if(!Number.isInteger(count)||count<1||count>100||!Number.isInteger(speed)||speed<20||speed>2000)throw Error('Arena limits: 1–100 games, 20–2000 ms think time');const result=await loadOpening();await launch('arena',result.moves,{remaining:count,speed,depth:result.depth,rank:result.rank,pending:false});$('arena-status').textContent=`Series running · ${count} game(s) remaining`;});};
 $('arena-pause').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='arena')return;closeEngines();if(timeout(game)){await persist();await ended();return;}debit(game);game.clock.paused=!game.clock.paused;game.clock.since=Date.now();game.revision++;await persist();scheduleEngine();});
-$('replay-prev').onclick=()=>{if(replayPly>0){replayPly--;renderReplay();}};$('replay-next').onclick=()=>{if(replayPly<replayGame.moves.length){replayPly++;renderReplay();}};$('replay-close').onclick=()=>{$('replay').hidden=true;};
+$('replay-prev').onclick=()=>{if(replayPly>0){replayPly--;renderReplay();}};$('replay-next').onclick=()=>{if(replayPly<replayGame.moves.length){replayPly++;renderReplay();}};$('replay-close').onclick=()=>{$('replay').close();};
 $('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await read(),null,2),'stockfish-credit-chess-backup.json');notice('Backup exported. It contains sensitive local profiles and password hashes.');});
 $('export-encrypted').onclick=()=>enqueue(async()=>{const data=await encryptBackup(await read(),$('backup-password').value);download(JSON.stringify(data),'stockfish-credit-chess-encrypted.json');$('backup-password').value='';notice('Encrypted backup exported. Keep its password safe.');});
 $('import-file').onchange=()=>enqueue(async()=>{

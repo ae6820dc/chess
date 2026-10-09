@@ -1,5 +1,13 @@
 # Verification — 2026-10-09
 
+## Latest: issue #2 interface refactor
+
+`npm test`: **13 passed**. `npm run test:browser`: **18 passed** (1.2 minutes).
+Existing functionality checks remain, with six new fixed-viewport tests.
+See the [complete interface report, measured geometry and screenshots](docs/issue-2/README.md).
+
+## Original engine/application delivery
+
 Environment: Node 24.19.0, Playwright 1.56.1, Debian Chromium
 151.0.7922.173. Browser viewport: 412 × 915, touch/mobile emulation.
 Server: http://127.0.0.1:4173/credit-chess/stockfish/ (repository subpath).

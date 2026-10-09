@@ -36,8 +36,8 @@ The browser tests use system Chromium at `/usr/bin/chromium`; set
 runner from reporting only file-level results.
 
 Latest local verification (2026-10-09): **13/13 domain/generator tests** and
-**12/12 mobile Chromium integration tests passed** (35.0 seconds for the
-final browser suite). Chromium 151.0.7922.173, Node 24.19.0.
+**18/18 Chromium integration tests passed** (including desktop/laptop, portrait,
+landscape and six fixed-viewport layout tests). Chromium 151.0.7922.173, Node 24.19.0.
 
 Automated coverage includes:
 
@@ -62,6 +62,28 @@ Automated coverage includes:
 
 The local browser tests emulate a **412 × 915 touch mobile viewport** in desktop
 Chromium. They do **not** establish physical Android 16 testing. See limitations.
+
+## Fixed-viewport interface (issue #2)
+
+After profile unlock the application fits the available viewport, with no
+vertical or horizontal document scrolling. Desktop/laptop keep board/clocks
+left and compact controls, internally scrolling match settings and move history
+right. Mobile uses expandable Match settings/Move history panes; starting a game
+closes these panes. The manual From/To form remains available behind “Manual move”.
+Opening Atlas, Arena, Archive and Preferences each have an internal scrolling
+pane. Saved-game replay is a modal dialog with keyboard focus and Escape support.
+
+Board size follows both measured width and height through ResizeObserver,
+`100dvh` with `100vh` fallback, safe areas and visual-viewport resizing. No
+root overflow hiding is used. Service-worker cache v2 includes the new layout
+module; profiles, preferences and saved games retain the same storage schema.
+
+[Issue #2 test report, measurements and four screenshots](docs/issue-2/README.md)
+record zero document scroll and complete board/clock/control access at
+1920×1080, 1366×768, 412×915 and 915×412, plus resize and 320×568 stress checks.
+The short landscape board is 182 pixels wide; use manual input or portrait for
+larger targets. Very small windows/virtual keyboards can shrink the board further.
+Physical Android 16/browser-chrome and non-Chromium browser tests were not run.
 
 ## Playing and clocks
 

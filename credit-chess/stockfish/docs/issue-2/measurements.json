@@ -1,0 +1,74 @@
+{
+  "desktop-1920x1080": {
+    "board": {
+      "x": 376.5,
+      "y": 202.140625,
+      "width": 801,
+      "height": 801
+    },
+    "document": {
+      "scrollHeight": 1080,
+      "clientHeight": 1080,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "scrollTop": 0,
+      "bodyTop": 0,
+      "windowTop": 0,
+      "rootOverflow": "visible"
+    }
+  },
+  "laptop-1366x768": {
+    "board": {
+      "x": 255.5,
+      "y": 202.140625,
+      "width": 489,
+      "height": 489
+    },
+    "document": {
+      "scrollHeight": 768,
+      "clientHeight": 768,
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "scrollTop": 0,
+      "bodyTop": 0,
+      "windowTop": 0,
+      "rootOverflow": "visible"
+    }
+  },
+  "portrait-412x915": {
+    "board": {
+      "x": 10,
+      "y": 403.890625,
+      "width": 392,
+      "height": 392
+    },
+    "document": {
+      "scrollHeight": 915,
+      "clientHeight": 915,
+      "scrollWidth": 412,
+      "clientWidth": 412,
+      "scrollTop": 0,
+      "bodyTop": 0,
+      "windowTop": 0,
+      "rootOverflow": "visible"
+    }
+  },
+  "landscape-915x412": {
+    "board": {
+      "x": 200.5,
+      "y": 168.390625,
+      "width": 182,
+      "height": 182
+    },
+    "document": {
+      "scrollHeight": 412,
+      "clientHeight": 412,
+      "scrollWidth": 915,
+      "clientWidth": 915,
+      "scrollTop": 0,
+      "bodyTop": 0,
+      "windowTop": 0,
+      "rootOverflow": "visible"
+    }
+  }
+}
