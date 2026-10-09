@@ -1,6 +1,8 @@
+import {cancelTransitions} from './animation.js';
 // UI geometry only. Game rules, engine searches, storage and clock data are independent.
 const $ = id => document.getElementById(id);
-const desktop = matchMedia('(min-width: 1000px) and (min-height: 600px)');
+const tablet = document.body.dataset.interface === 'tablet';
+const desktop = matchMedia(tablet ? '(min-width: 900px) and (min-height: 600px)' : '(min-width: 1000px) and (min-height: 600px)');
 let pane = 'match';
 
 export function setPane(next) {
@@ -36,6 +38,7 @@ function fitBoard(stage) {
   const {width, height} = stage.getBoundingClientRect();
   const size = Math.floor(Math.min(width, height));
   if (size <= 0) return; // Hidden tabs/dialogs get measured when shown.
+  if(board.style.getPropertyValue('--board-size')!==`${size}px`)cancelTransitions();
   board.style.setProperty('--board-size', `${size}px`);
   stage.parentElement.style.setProperty('--fitted-size', `${size}px`);
   board.style.setProperty('--piece-size', `${size * .087}px`);
@@ -51,5 +54,7 @@ window.visualViewport?.addEventListener('resize', updateViewport);
 desktop.addEventListener('change', () => setPane(pane));
 $('match-toggle').onclick = () => setPane(pane === 'match' ? 'none' : 'match');
 $('history-toggle').onclick = () => setPane(pane === 'history' ? 'none' : 'history');
+$('panel-close')?.addEventListener('click',()=>{setPane('none');$('match-toggle').focus();});
+document.addEventListener('keydown',e=>{if(tablet&&e.key==='Escape')setPane('none');});
 updateViewport();
-setPane(pane);
+setPane(tablet&&!desktop.matches?'none':pane);

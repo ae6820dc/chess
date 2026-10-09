@@ -57,6 +57,7 @@ export function validateBackup(data){
   integer(p.balance,'Balance',true);
   if(p.auth?.iterations!==310000||fromBase64(p.auth.salt).length!==16||fromBase64(p.auth.hash).length!==32)throw Error('Invalid password record');
   const f=p.prefs;if(!f||!['wood','gold','green','midnight'].includes(f.theme)||!Number.isFinite(f.base)||f.base<1||f.base>86400||!Number.isFinite(f.increment)||f.increment<0||f.increment>3600||!['w','b'].includes(f.color)||typeof f.sound!=='boolean'||!['1320','2000','2800','3190','MAX'].includes(f.difficulty)||!Number.isInteger(f.openingDepth)||f.openingDepth<1||f.openingDepth>3)throw Error('Invalid preferences');
+  if(f.animationDuration!==undefined&&![0,250,400,600,800,1000].includes(f.animationDuration))throw Error('Invalid animation duration');
   integer(f.openingRank,'Opening cursor');integer(f.stake,'Stake');for(const level of Object.keys(DEFAULTS.multipliers))integer(f.multipliers?.[level],'Multiplier');
  }
  for(const g of data.games){

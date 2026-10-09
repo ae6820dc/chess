@@ -1,6 +1,15 @@
-# Verification — 2026-10-09
+# Verification — 2026-10-10
 
-## Latest: issue #2 interface refactor
+## Latest: issue #3 tablet interface and piece animations
+
+13 unit tests and 32 distinct browser scenarios passed. The full regression
+run passed 31 tests; a final focused run passed three checks (two rechecks plus
+one added orientation/duration scenario). Real Stockfish, both entry points,
+all requested viewport sizes, movement duration and reduced motion are covered.
+Desktop baseline PNGs match byte-for-byte at 1366 × 768 and 1920 × 1080.
+See [measured boards, screenshots and limitations](docs/issue-3/README.md).
+
+## Issue #2 interface refactor
 
 `npm test`: **13 passed**. `npm run test:browser`: **18 passed** (1.2 minutes).
 Existing functionality checks remain, with six new fixed-viewport tests.

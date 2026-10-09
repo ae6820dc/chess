@@ -1,3 +1,4 @@
+import {prepareTransition,animateTransition,movementDuration,cancelTransitions} from './animation.js';
 import {setUnlocked,showGame} from './layout.js';
 import {Chess} from './vendor/chess.js';
 import {StockfishAdapter} from './engine.js';
@@ -12,10 +13,11 @@ function notice(text,error=false){$('notice').textContent=text;$('notice').class
 function closeEngines(){generation++;searching=false;for(const e of engines)e.close();engines=[];$('engine-status').textContent='Engine idle';}
 const names={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const glyphs={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
-function boardView(target,chess,orientation='w',interactive=false){
+export function boardView(target,chess,orientation='w',interactive=false){
  const files=orientation==='w'?'abcdefgh':'hgfedcba',ranks=orientation==='w'?'87654321':'12345678';
  let destinations=[];
  if(interactive&&selected)destinations=chess.moves({square:selected,verbose:true}).map(m=>m.to);
+ const transition=prepareTransition(target,chess,orientation);
  target.replaceChildren();
  for(const r of ranks)for(const f of files){
   const square=f+r,p=chess.get(square),el=document.createElement('button');el.type='button';el.className='square'+((f.charCodeAt(0)+Number(r))%2?' dark':'');el.dataset.square=square;
@@ -26,6 +28,7 @@ function boardView(target,chess,orientation='w',interactive=false){
   if(interactive&&game?.moves.length){const m=game.moves.at(-1);if(m.slice(0,2)===square||m.slice(2,4)===square)el.classList.add('last');}
   if(!interactive)el.tabIndex=-1;target.append(el);
  }
+ animateTransition(target,transition,prefs?.animationDuration);
 }
 function renderClocks(){
  const g=game,clocks=g?remaining(g):{w:(prefs?.base||600)*1000,b:(prefs?.base||600)*1000};
@@ -44,9 +47,10 @@ function renderGame(){
  $('undo').disabled=!active||game.mode!=='analysis'||game.moves.length<=game.openingPlies;$('arena-pause').hidden=!(active&&game.mode==='arena');$('arena-pause').textContent=game?.clock.paused?'Resume arena':'Pause arena';
  $('from').disabled=$('to').disabled=!active||game.mode==='arena'||c.turn()!==game.player;
 }
-function tab(name){for(const e of document.querySelectorAll('.tab'))e.hidden=e.id!=='tab-'+name;for(const e of document.querySelectorAll('[data-tab]'))e.classList.toggle('active',e.dataset.tab===name);if(name==='archive')enqueue(renderArchive);}
+function tab(name){cancelTransitions();for(const e of document.querySelectorAll('.tab'))e.hidden=e.id!=='tab-'+name;for(const e of document.querySelectorAll('[data-tab]'))e.classList.toggle('active',e.dataset.tab===name);if(name==='archive')enqueue(renderArchive);}
 function applyPrefs(){
  document.body.dataset.theme=prefs.theme;
+ $('animation-duration').value=movementDuration(prefs.animationDuration,false);
  for(const id of ['theme','difficulty','color','stake'])$(id).value=prefs[id];$('sound').checked=prefs.sound;
  $('base').value=prefs.base/60;$('increment').value=prefs.increment;const preset=`${prefs.base},${prefs.increment}`;$('preset').value=['600,5','300,3','180,2'].includes(preset)?preset:'custom';
  $('opening-depth').value=prefs.openingDepth;$('opening-rank').value=prefs.openingRank;
@@ -84,13 +88,17 @@ function scheduleEngine(){
  if(!engines.length){for(let i=0;i<required;i++){const engine=new StockfishAdapter(message=>{$('engine-status').textContent=message;});engine.ready.catch(()=>{});engines.push(engine);}}
  const engine=engines[game.mode==='arena'?(c.turn()==='w'?0:1):0],token=generation,id=game.id;
  searching=true;$('engine-status').textContent='Stockfish thinking…';const left=remaining(game),time=Math.min(game.mode==='arena'?game.arena.speed:600,Math.max(1,left[c.turn()]-20));
- engine.move({moves:[...game.moves],difficulty:game.difficulty,milliseconds:time,clocks:left,increment:Math.floor(game.clock.increment*1000)}).then(move=>enqueue(async()=>{
+ engine.move({moves:[...game.moves],difficulty:game.difficulty,milliseconds:time,clocks:left,increment:Math.floor(game.clock.increment*1000)}).then(async move=>{
+  // Search immediately at the requested budget; only Arena presentation waits.
+  // The running clock still records real wall-clock time, including playback cadence.
+  if(game?.mode==='arena'){const animations=$('board').getAnimations({subtree:true});if(animations.length){await Promise.allSettled(animations.map(a=>a.finished));await new Promise(resolve=>setTimeout(resolve,150));}}
+  return enqueue(async()=>{
   if(token!==generation||game?.id!==id||game.status!=='active'||game.clock.paused)return;
   searching=false;
   if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move))throw Error('Engine returned no playable move');
   const legal=play(game,{from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]});if(legal)sound();await persist();
   if(game.status==='finished')await ended();else scheduleEngine();
- })).catch(error=>enqueue(async()=>{
+ });}).catch(error=>enqueue(async()=>{
   if(token!==generation||game?.id!==id)return;closeEngines();
   if(game.mode==='arena'){debit(game);game.clock.paused=true;game.revision++;await persist();}
   notice('Engine error: '+error.message+'. '+(game.mode==='arena'?'Arena paused; resume to retry.':'Clock continues. Reload to retry, or resign.'),true);
@@ -171,12 +179,14 @@ $('claim').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode==
 $('undo').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='analysis'||game.moves.length<=game.openingPlies)return;if(timeout(game)){await persist();await ended();return;}closeEngines();debit(game);do{game.moves.pop();}while(game.moves.length>game.openingPlies&&chessFor(game).turn()!==game.player);game.clock.since=Date.now();game.revision++;selected=null;await persist();scheduleEngine();});
 $('preset').onchange=()=>enqueue(async()=>{if($('preset').value!=='custom'){const [base,increment]=$('preset').value.split(',').map(Number);$('base').value=base/60;$('increment').value=increment;}await capturePrefs();if(!game)renderClocks();});
 for(const id of ['difficulty','color','stake','base','increment'])$(id).onchange=()=>enqueue(async()=>{await capturePrefs();if(!game)renderGame();});
+$('animation-duration').onchange=()=>enqueue(async()=>{prefs.animationDuration=Number($('animation-duration').value);cancelTransitions();await savePrefs(profile.id,prefs);});
 $('theme').onchange=()=>enqueue(async()=>{prefs.theme=$('theme').value;document.body.dataset.theme=prefs.theme;await savePrefs(profile.id,prefs);});$('sound').onchange=()=>enqueue(async()=>{prefs.sound=$('sound').checked;await savePrefs(profile.id,prefs);});
 $('multiplier-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const multipliers={};for(const input of document.querySelectorAll('[data-level]')){if(!/^\d+$/.test(input.value))throw Error('Multipliers must be whole non-negative integers');multipliers[input.dataset.level]=BigInt(input.value).toString();}prefs.multipliers=multipliers;await savePrefs(profile.id,prefs);payoutNote();notice('Multipliers saved. Existing game terms stay locked.');});};
 $('opening-jump').onclick=()=>enqueue(()=>loadOpening());$('opening-prev').onclick=()=>enqueue(()=>loadOpening((BigInt($('opening-rank').value)-1n).toString()));$('opening-next').onclick=()=>enqueue(()=>loadOpening((BigInt($('opening-rank').value)+1n).toString()));$('opening-cancel').onclick=()=>openingReject?.();$('opening-play').onclick=()=>{tab('play');$('use-opening').checked=true;};
 $('arena-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{await capturePrefs();if(!await abandon())return;const count=Number($('arena-count').value),speed=Number($('arena-speed').value);if(!Number.isInteger(count)||count<1||count>100||!Number.isInteger(speed)||speed<20||speed>2000)throw Error('Arena limits: 1–100 games, 20–2000 ms think time');const result=await loadOpening();await launch('arena',result.moves,{remaining:count,speed,depth:result.depth,rank:result.rank,pending:false});$('arena-status').textContent=`Series running · ${count} game(s) remaining`;});};
 $('arena-pause').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='arena')return;closeEngines();if(timeout(game)){await persist();await ended();return;}debit(game);game.clock.paused=!game.clock.paused;game.clock.since=Date.now();game.revision++;await persist();scheduleEngine();});
 $('replay-prev').onclick=()=>{if(replayPly>0){replayPly--;renderReplay();}};$('replay-next').onclick=()=>{if(replayPly<replayGame.moves.length){replayPly++;renderReplay();}};$('replay-close').onclick=()=>{$('replay').close();};
+$('replay').addEventListener('close',cancelTransitions);
 $('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await read(),null,2),'stockfish-credit-chess-backup.json');notice('Backup exported. It contains sensitive local profiles and password hashes.');});
 $('export-encrypted').onclick=()=>enqueue(async()=>{const data=await encryptBackup(await read(),$('backup-password').value);download(JSON.stringify(data),'stockfish-credit-chess-encrypted.json');$('backup-password').value='';notice('Encrypted backup exported. Keep its password safe.');});
 $('import-file').onchange=()=>enqueue(async()=>{
@@ -186,7 +196,8 @@ $('import-file').onchange=()=>enqueue(async()=>{
 $('recover').onclick=()=>enqueue(async()=>{if(game?.status==='active')throw Error('Finish the current game before recovery');if(!confirm('Restore the pre-import snapshot? The current data will become the new recovery copy.'))return;await restoreRecovery();await lockProfile();notice('Pre-import data restored. Unlock a profile to continue.');});
 let ticking=false;
 setInterval(()=>{if(!profile||!game)return;renderClocks();if(storageBlocked)return;if(!ticking&&game.status==='active'&&!game.clock.paused&&remaining(game)[chessFor(game).turn()]<=0){ticking=true;enqueue(async()=>{try{if(timeout(game)){closeEngines();await persist();await ended();}}finally{ticking=false;}});}},200);
-window.addEventListener('pagehide',()=>closeEngines());
+window.addEventListener('pagehide',()=>{cancelTransitions();closeEngines();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelTransitions();});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 async function init(){
  await read();

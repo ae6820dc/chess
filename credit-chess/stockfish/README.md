@@ -1,11 +1,39 @@
 # Stockfish Credit Chess
 
-Static, mobile-first chess application for `ae6820dc/chess`, issue #1.
+Static chess application for `ae6820dc/chess`. Desktop and tablet/phone entry points share all game, engine and storage modules.
 
 Live application: https://ae6820dc.github.io/chess/credit-chess/stockfish/
 
 No backend and no runtime CDNs. Open over HTTPS (GitHub Pages) or localhost,
 not `file://`. All gameplay code, chess.js and Stockfish WASM are bundled.
+
+## Desktop, phones and tablets (issue #3)
+
+Use `index.html` for the original desktop layout and `tablet.html` for phones
+and tablets. The tablet page adds its own stylesheet, spacious square board,
+compact landscape navigation and internally scrolling settings/history panels.
+Its footer links back to desktop. Both pages use the same origin, IndexedDB,
+session profile, credits, archives, themes and backups. Navigate in one tab;
+the existing writer lock still protects data from concurrent chess tabs.
+
+Preferences offers **Piece movement**: instant, 250, 400, **600 (default)**,
+800 or 1000 ms, saved with the profile. The operating system's reduced-motion
+preference always disables movement. Shared Web Animations move actual pieces
+with easing on player/Stockfish moves, forward/backward archive replay and
+Arena. Castling moves both king and rook. Interruptions snap to the committed
+position; resize, page/tab changes and reduced motion cancel outstanding
+transforms. Presentation never writes game state or credits.
+
+Arena begins the next engine calculation immediately using its selected think
+time. If its result arrives before the preceding piece animation finishes,
+presentation waits for that animation plus a 150 ms breathing interval before
+applying the next move. Clocks continue to charge actual wall-clock time; pause,
+timeout and generation checks remain authoritative. Replay remains manual and
+read-only, so users control its cadence with Previous/Next.
+
+Run `npm test` and `npm run test:browser`. Set `CHROMIUM_PATH` when Chromium
+is not at `/usr/bin/chromium` (the delivery tests used Windows Edge).
+See [issue #3 verification](docs/issue-3/README.md) for geometry and screenshots.
 
 ## Tested delivery phases
 
