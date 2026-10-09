@@ -1,0 +1,86 @@
+import { chessFor, integer, payout, pgn, DEFAULTS } from './core.js';
+export const SCHEMA=1;
+export const empty=()=>({schemaVersion:SCHEMA,profiles:[],games:[],lastProfile:null});
+let db;
+export async function openStorage(){
+ if(db)return db;
+ db=await new Promise((resolve,reject)=>{
+  const r=indexedDB.open('stockfish-credit-chess',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('data');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.onblocked=()=>reject(Error('Storage upgrade blocked. Close other chess tabs.'));
+ });
+ db.onversionchange=()=>{db.close();db=null;};return db;
+}
+export async function read(key='snapshot') {
+ const d=await openStorage();return new Promise((resolve,reject)=>{const t=d.transaction('data'),r=t.objectStore('data').get(key);r.onsuccess=()=>resolve(r.result || (key==='snapshot'?empty():null));r.onerror=()=>reject(r.error);});
+}
+export async function mutate(fn) {
+ const d=await openStorage();return new Promise((resolve,reject)=>{
+  const t=d.transaction('data','readwrite'),s=t.objectStore('data'),r=s.get('snapshot');let result;
+  r.onsuccess=()=>{try { const data=r.result||empty();result=fn(data,s);s.put(data,'snapshot'); }catch(e){t.abort();reject(e);}};
+  t.oncomplete=()=>resolve(result);t.onerror=()=>reject(t.error || Error('IndexedDB write failed'));t.onabort=()=>reject(t.error || Error('Storage transaction aborted'));
+ });
+}
+export async function saveGame(game) {
+ const snapshot=structuredClone(game);snapshot.pgn=pgn(snapshot);
+ return mutate(data=>{
+  const profile=data.profiles.find(p=>p.id===snapshot.profileId);if(!profile)throw Error('Profile missing');
+  const i=data.games.findIndex(g=>g.id===snapshot.id),existing=data.games[i];
+  if(existing && (existing.settled || existing.revision>snapshot.revision)) return existing;
+  if(snapshot.status==='finished'&&!snapshot.settled){profile.balance=(BigInt(profile.balance)+payout(snapshot)).toString();snapshot.settled=true;snapshot.endingBalance=profile.balance;}
+  if(i<0)data.games.push(snapshot);else data.games[i]=snapshot;return snapshot;
+ });
+}
+export async function savePrefs(id,prefs){return mutate(data=>{const p=data.profiles.find(p=>p.id===id);if(!p)throw Error('Profile missing');p.prefs=structuredClone(prefs);});}
+export const bytesToBase64=bytes=>{let str='';for(const b of bytes)str+=String.fromCharCode(b);return btoa(str);};
+export const fromBase64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function derive(password,salt,usage) {
+ const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits','deriveKey']);
+ const spec={name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'};
+ return usage?crypto.subtle.deriveKey(spec,base,{name:'AES-GCM',length:256},false,usage):new Uint8Array(await crypto.subtle.deriveBits(spec,base,256));
+}
+export async function createProfile(name,password) {
+ name=name.trim();if(!name||name.length>60||password.length<8)throw Error('Use a name and a password of at least 8 characters');
+ const salt=crypto.getRandomValues(new Uint8Array(16)),hash=await derive(password,salt);
+ const profile={id:crypto.randomUUID(),name,auth:{salt:bytesToBase64(salt),hash:bytesToBase64(hash),iterations:310000},balance:'100000',prefs:structuredClone(DEFAULTS),created:Date.now()};
+ await mutate(data=>{if(data.profiles.some(p=>p.name===name))throw Error('Profile name already exists');data.profiles.push(profile);data.lastProfile=profile.id;});return profile;
+}
+export async function authenticate(profile,password){
+ const actual=await derive(password,fromBase64(profile.auth.salt)),expected=fromBase64(profile.auth.hash);let diff=actual.length^expected.length;
+ for(let i=0;i<actual.length;i++)diff|=actual[i]^expected[i];if(diff)throw Error('Incorrect local password');
+ return profile;
+}
+export function validateBackup(data){
+ if(!data||data.schemaVersion!==SCHEMA||!Array.isArray(data.profiles)||!Array.isArray(data.games)||data.profiles.length>1000||data.games.length>10000)throw Error('Unsupported or invalid backup schema');
+ const ids=new Set(),gids=new Set(),activeProfiles=new Set();
+ for(const p of data.profiles){
+  if(typeof p.id!=='string'||ids.has(p.id)||typeof p.name!=='string'||p.name.length>60||!p.name.trim())throw Error('Invalid profile');ids.add(p.id);
+  integer(p.balance,'Balance',true);
+  if(p.auth?.iterations!==310000||fromBase64(p.auth.salt).length!==16||fromBase64(p.auth.hash).length!==32)throw Error('Invalid password record');
+  const f=p.prefs;if(!f||!['wood','gold','green','midnight'].includes(f.theme)||!Number.isFinite(f.base)||f.base<1||f.base>86400||!Number.isFinite(f.increment)||f.increment<0||f.increment>3600||!['w','b'].includes(f.color)||typeof f.sound!=='boolean'||!['1320','2000','2800','3190','MAX'].includes(f.difficulty)||!Number.isInteger(f.openingDepth)||f.openingDepth<1||f.openingDepth>3)throw Error('Invalid preferences');
+  integer(f.openingRank,'Opening cursor');integer(f.stake,'Stake');for(const level of Object.keys(DEFAULTS.multipliers))integer(f.multipliers?.[level],'Multiplier');
+ }
+ for(const g of data.games){
+  if(typeof g.id!=='string'||gids.has(g.id)||!ids.has(g.profileId)||!['rated','analysis','arena'].includes(g.mode)||!['active','finished'].includes(g.status)||!['*','1-0','0-1','1/2-1/2'].includes(g.result)||!['w','b'].includes(g.player)||!['1320','2000','2800','3190','MAX'].includes(g.difficulty)||typeof g.reason!=='string')throw Error('Invalid game');gids.add(g.id);
+  integer(g.stake,'Stake');integer(g.multiplier,'Multiplier');integer(g.startingBalance,'Starting balance',true);if(g.endingBalance!==null)integer(g.endingBalance,'Ending balance',true);
+  if(!Array.isArray(g.moves)||g.moves.length>10000||g.moves.some(m=>typeof m!=='string'||! /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m))||!Number.isInteger(g.openingPlies)||g.openingPlies<0||g.openingPlies>g.moves.length)throw Error('Invalid moves');chessFor(g);
+  if(!g.clock||typeof g.clock.paused!=='boolean'||!Number.isFinite(g.clock.base)||g.clock.base<1||g.clock.base>86400||!Number.isFinite(g.clock.increment)||g.clock.increment<0||g.clock.increment>3600||['w','b','since'].some(k=>!Number.isFinite(g.clock[k])||g.clock[k]<0)||!Number.isInteger(g.revision)||g.revision<0||![g.created,g.updated].every(Number.isFinite)||typeof g.settled!=='boolean')throw Error('Invalid clock or timestamps');
+  if(g.status==='active'&&(g.result!=='*'||g.settled||g.finished!==null||activeProfiles.has(g.profileId)))throw Error('Invalid or duplicate active game');
+  if(g.status==='active')activeProfiles.add(g.profileId);
+  if(g.mode==='arena'){const a=g.arena;if(!a||!Number.isInteger(a.remaining)||a.remaining<1||a.remaining>100||!Number.isInteger(a.speed)||a.speed<20||a.speed>2000||!Number.isInteger(a.depth)||a.depth<1||a.depth>3||typeof a.pending!=='boolean')throw Error('Invalid arena series');integer(a.rank,'Arena cursor');if(BigInt(a.rank)>=[0n,20n,400n,8902n][a.depth])throw Error('Invalid arena rank');}
+  if(g.status==='finished'&&(g.result==='*'||!g.settled||!Number.isFinite(g.finished)||g.endingBalance===null))throw Error('Invalid finished game');
+ }
+ return data;
+}
+export async function importBackup(input){
+ const incoming=validateBackup(input);
+ return mutate((data,store)=>{
+  store.put(structuredClone(data),'recovery');let addedProfiles=0,addedGames=0,conflicts=0;
+  const accepted=new Set();
+  for(const p of incoming.profiles){if(data.profiles.some(x=>x.id===p.id)){conflicts++;continue;}if(data.profiles.some(x=>x.name===p.name))p.name=p.name.slice(0,40)+' (imported '+p.id.slice(0,6)+')';data.profiles.push(structuredClone(p));accepted.add(p.id);addedProfiles++;}
+  for(const g of incoming.games){if(!accepted.has(g.profileId)||data.games.some(x=>x.id===g.id)){conflicts++;continue;}data.games.push(structuredClone(g));addedGames++;}
+  return {addedProfiles,addedGames,conflicts};
+ });
+}
+export async function restoreRecovery(){const recovery=await read('recovery');if(!recovery)throw Error('No pre-import recovery copy');validateBackup(recovery);return mutate((data,s)=>{s.put(structuredClone(data),'recovery');Object.assign(data,recovery);});}
+export async function encryptBackup(data,password){if(password.length<8)throw Error('Backup password must have at least 8 characters');const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await derive(password,salt,['encrypt']);const bytes=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));return {encrypted:true,schemaVersion:1,salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(bytes))};}
+export async function decryptBackup(data,password){if(data.schemaVersion!==1||fromBase64(data.salt).length!==16||fromBase64(data.iv).length!==12)throw Error('Invalid encrypted backup');const key=await derive(password,fromBase64(data.salt),['decrypt']);try{return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:fromBase64(data.iv)},key,fromBase64(data.ciphertext))));}catch{throw Error('Wrong password or damaged encrypted backup');}}
