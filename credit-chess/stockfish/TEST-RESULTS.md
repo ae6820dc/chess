@@ -1,3 +1,23 @@
+# Verification — 2026-10-16
+
+## Latest: issue #4 application identity and IndexedDB migration
+
+- `npm test`: 13 passed, 0 failed.
+- `npm run test:browser`: 37 passed, 0 failed (2.0 minutes, final full run).
+- `node --check storage.js`, `node --check tests/browser/storage.spec.js` and
+  `git diff --check`: passed.
+
+Five new browser scenarios verify fixed lowercase hex identifiers, matching IDs
+in both interfaces, actual database naming, unchanged legacy records, complete
+snapshot/recovery/extension copying, opening settings and arena progress,
+shared persistence across navigation/reload, invalid-source rejection,
+transaction rollback, quota failure, safe retry, and refusal to overwrite an
+unmarked nonempty destination. Existing gameplay, engine, backup encryption,
+offline, layouts, tablet and animation checks all pass.
+
+The Program ID appears in Preferences & backups to preserve the existing footer
+and tablet login geometry. No chess, engine, animation or backup format changes.
+
 # Verification — 2026-10-10
 
 ## Latest: issue #3 tablet interface and piece animations

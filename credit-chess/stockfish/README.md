@@ -312,3 +312,24 @@ Application code: GPL-3.0-or-later. See `LICENSE.txt`.
   package. See `vendor/NOTICE.md` and `vendor/SHA256SUMS` for provenance.
 
 Playwright is a development/test dependency, not loaded by the application.
+
+### Fixed application identity and storage migration (issue #4)
+
+Program ID: `47f4d94492933a3b0a3f406e6e4ce412` (shown under Preferences & backups in both interfaces).
+Storage Key / IndexedDB database name: `bbebe43a0b38a335`.
+These randomly generated identifiers are fixed in the source, never generated at launch.
+Both interfaces share this database on the same browser origin.
+
+On first use, storage copies every `data` record from the legacy
+`stockfish-credit-chess` database, including the snapshot, pre-import recovery
+backup and extension records. Snapshot and recovery data must pass the existing
+backup validator. Copying and the completion marker share one atomic IndexedDB
+transaction; a failure aborts the copy, blocks reads/writes, and reports an error
+instead of starting an empty profile. Reload to retry after resolving storage
+permissions, quota, or invalid legacy data. Do not clear browser data. The legacy
+database is retained unchanged. A completed migration is never replayed over newer
+data, and an unmarked nonempty destination is rejected rather than overwritten.
+Reload or close all older chess tabs before using the updated app. Subsequent
+writes use only the new database; the retained legacy copy is not a live mirror.
+JSON/encrypted backup formats and schema version remain unchanged. Export regular
+backups, especially before changing browsers or origins.

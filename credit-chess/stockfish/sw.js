@@ -1,5 +1,5 @@
 // Scoped to this application only; no external runtime requests.
-const CACHE='stockfish-credit-chess-v3';
+const CACHE='stockfish-credit-chess-v4';
 const ASSETS=['./','index.html','tablet.html','tablet.css','animation.js','app.js','layout.js','core.js','storage.js','engine.js','openings.js','opening-worker.js','style.css','icon.svg','vendor/chess.js','vendor/stockfish-18-lite-single.js','vendor/stockfish-18-lite-single.wasm'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('stockfish-credit-chess-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

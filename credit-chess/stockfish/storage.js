@@ -1,14 +1,69 @@
 import { chessFor, integer, payout, pgn, DEFAULTS } from './core.js';
 export const SCHEMA=1;
 export const empty=()=>({schemaVersion:SCHEMA,profiles:[],games:[],lastProfile:null});
-let db;
+// Fixed application identifiers; never generate these at launch.
+export const PROGRAM_ID='47f4d94492933a3b0a3f406e6e4ce412';
+export const STORAGE_KEY='bbebe43a0b38a335';
+export const LEGACY_STORAGE_KEY='stockfish-credit-chess';
+let db,opening;
+function connect(name,target=false){
+ return new Promise((resolve,reject)=>{
+  const r=indexedDB.open(name,1);let failed=false;
+  r.onupgradeneeded=()=>{r.result.createObjectStore('data');if(target)r.result.createObjectStore('metadata');};
+  r.onsuccess=()=>{if(failed)r.result.close();else resolve(r.result);};
+  r.onerror=()=>reject(r.error);
+  r.onblocked=()=>{failed=true;reject(Error('Storage upgrade blocked. Close other chess tabs.'));};
+ });
+}
+function records(d){
+ return new Promise((resolve,reject)=>{
+  const t=d.transaction('data'),s=t.objectStore('data'),rows=[];
+  const r=s.openCursor();r.onsuccess=()=>{const c=r.result;if(c){rows.push([c.key,c.value]);c.continue();}};
+  t.oncomplete=()=>resolve(rows);t.onerror=t.onabort=()=>reject(t.error||Error('Cannot read legacy storage'));
+ });
+}
+async function migrate(target){
+ // Read without altering the legacy store. Copy every record, including recovery
+ // backups and future extension records. The marker commits with the data.
+ const legacy=await connect(LEGACY_STORAGE_KEY);
+ let rows;
+ try{rows=await records(legacy);}finally{legacy.close();}
+ return new Promise((resolve,reject)=>{
+  const t=target.transaction(['data','metadata'],'readwrite'),data=t.objectStore('data'),meta=t.objectStore('metadata');
+  let failure;
+  const r=meta.get('legacy-migration');
+  r.onsuccess=()=>{
+   if(r.result===1)return;
+   const count=data.count();count.onsuccess=()=>{
+    try{
+     if(count.result)throw Error('Unmarked destination contains data; refusing to overwrite it');
+     if(rows.length&&!rows.some(([key])=>key==='snapshot'))throw Error('Legacy snapshot is missing');
+     for(const [key,value] of rows){if(key==='snapshot'||key==='recovery')validateBackup(value);}
+     for(const [key,value] of rows)data.add(value,key);
+     meta.add(1,'legacy-migration');
+    }catch(e){failure=e;t.abort();}
+   };
+  };
+  t.oncomplete=()=>resolve();
+  t.onerror=t.onabort=()=>reject(failure||t.error||Error('Migration transaction aborted'));
+ });
+}
 export async function openStorage(){
  if(db)return db;
- db=await new Promise((resolve,reject)=>{
-  const r=indexedDB.open('stockfish-credit-chess',1);
-  r.onupgradeneeded=()=>r.result.createObjectStore('data');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.onblocked=()=>reject(Error('Storage upgrade blocked. Close other chess tabs.'));
- });
- db.onversionchange=()=>{db.close();db=null;};return db;
+ if(!opening)opening=(async()=>{
+  let target;
+  try{
+   target=await connect(STORAGE_KEY,true);
+   // A completed migration must not depend on the old database remaining readable.
+   const done=await new Promise((resolve,reject)=>{
+    const t=target.transaction('metadata'),r=t.objectStore('metadata').get('legacy-migration');
+    r.onsuccess=()=>resolve(r.result===1);r.onerror=()=>reject(r.error);
+   });
+   if(!done)await migrate(target);
+   db=target;db.onversionchange=()=>{target.close();db=null;};return db;
+  }catch(e){target?.close();throw Error('Storage migration/open failed: '+e.message+'; existing data was retained');}
+ })().finally(()=>{opening=null;});
+ return opening;
 }
 export async function read(key='snapshot') {
  const d=await openStorage();return new Promise((resolve,reject)=>{const t=d.transaction('data'),r=t.objectStore('data').get(key);r.onsuccess=()=>resolve(r.result || (key==='snapshot'?empty():null));r.onerror=()=>reject(r.error);});
