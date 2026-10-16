@@ -7,12 +7,11 @@ Live application: https://ae6820dc.github.io/chess/credit-chess/stockfish/
 No backend and no runtime CDNs. Open over HTTPS (GitHub Pages) or localhost,
 not `file://`. All gameplay code, chess.js and Stockfish WASM are bundled.
 
-## Desktop, phones and tablets (issue #3)
+## Desktop, phones and tablets
 
-Use `index.html` for the original desktop layout and `tablet.html` for phones
-and tablets. The tablet page adds its own stylesheet, spacious square board,
-compact landscape navigation and internally scrolling settings/history panels.
-Its footer links back to desktop. Both pages use the same origin, IndexedDB,
+Both `index.html` and `tablet.html` maximize the board across phones, tablets
+and desktop screens using the shared responsive layout. The tablet entry retains
+its link back to the main entry. Both pages use the same origin, IndexedDB,
 selected profile, credits, archives, themes and backups. Navigate in one tab;
 the existing writer lock still protects data from concurrent chess tabs.
 
@@ -32,8 +31,8 @@ timeout and generation checks remain authoritative. Replay remains manual and
 read-only, so users control its cadence with Previous/Next.
 
 Run `npm test` and `npm run test:browser`. Set `CHROMIUM_PATH` when Chromium
-is not at `/usr/bin/chromium` (the delivery tests used Windows Edge).
-See [issue #3 verification](docs/issue-3/README.md) for geometry and screenshots.
+is not at `/usr/bin/chromium`.
+See [issue #6 verification](docs/issue-6/README.md) for geometry and screenshots.
 
 ## Tested delivery phases
 
@@ -64,10 +63,10 @@ The browser tests use system Chromium at `/usr/bin/chromium`; set
 runner from reporting only file-level results.
 
 Latest local verification (2026-10-16): **13/13 domain/generator tests** and
-**40/40 Chromium integration tests passed**, including automatic local profiles,
+**42/42 Chromium integration tests passed**, including automatic local profiles,
 PIN rejection/cancellation, cross-entrypoint selection, backups and regression
 checks. Chromium 151.0.7922.173, Node 24.19.0.
-See [issue #5 verification](docs/issue-5/README.md).
+See [issue #6 verification](docs/issue-6/README.md).
 
 Automated coverage includes:
 
@@ -93,27 +92,32 @@ Automated coverage includes:
 The local browser tests emulate a **412 × 915 touch mobile viewport** in desktop
 Chromium. They do **not** establish physical Android 16 testing. See limitations.
 
-## Fixed-viewport interface (issue #2)
+## Board-first responsive interface (issue #6)
 
-On opening the application the application fits the available viewport, with no
-vertical or horizontal document scrolling. Desktop/laptop keep board/clocks
-left and compact controls, internally scrolling match settings and move history
-right. Mobile uses expandable Match settings/Move history panes; starting a game
-closes these panes. The manual From/To form remains available behind “Manual move”.
-Opening Atlas, Arena, Archive and Preferences each have an internal scrolling
-pane. Saved-game replay is a modal dialog with keyboard focus and Escape support.
+Both `index.html` and `tablet.html` use the shared `board-layout.css` geometry.
+Portrait screens give the board the full width with 4 px side gutters; controls
+and clocks remain outside the squares. Landscape screens put navigation,
+notifications, account details, gameplay actions and panels in a compact right
+rail, leaving the board a full-height column bounded only by the two clocks.
+The former 1600 px shell limit no longer restricts large desktop boards.
 
-Board size follows both measured width and height through ResizeObserver,
-`100dvh` with `100vh` fallback, safe areas and visual-viewport resizing. No
-root overflow hiding is used. Service-worker cache v2 includes the new layout
-module; profiles, preferences and saved games retain the same storage schema.
+Match settings and Move history expand below the board on portrait screens and
+close when a game starts. Short landscape screens show one rail panel at a time;
+tall landscape screens show both. Opening Atlas, Arena, Archive and Preferences
+retain internal scrolling. Manual From/To input and replay dialogs remain
+available. Controls have at least 44 px touch targets. Pieces scale to about
+96% of square size, with resize cancelling superseded movement animations.
 
-[Issue #2 test report, measurements and four screenshots](docs/issue-2/README.md)
-record zero document scroll and complete board/clock/control access at
-1920×1080, 1366×768, 412×915 and 915×412, plus resize and 320×568 stress checks.
-The short landscape board is 182 pixels wide; use manual input or portrait for
-larger targets. Very small windows/virtual keyboards can shrink the board further.
-Physical Android 16/browser-chrome and non-Chromium browser tests were not run.
+ResizeObserver fits the square board to its actual available width and height.
+Dynamic viewport height, safe-area insets and visual-viewport changes remain
+supported without hiding root overflow. Service-worker cache v6 includes the
+shared stylesheet. Program ID, Storage Key, data formats, rules and engine
+settings are unchanged.
+
+See [issue #6 measurements, screenshots and verification](docs/issue-6/README.md).
+Earlier layout reports remain in [issue #2](docs/issue-2/README.md) and
+[issue #3](docs/issue-3/README.md). Physical device and non-Chromium browser tests
+were not run; very small windows and virtual keyboards can shrink the board.
 
 ## Playing and clocks
 

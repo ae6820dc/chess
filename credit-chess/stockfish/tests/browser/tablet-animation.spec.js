@@ -105,7 +105,11 @@ test('preferences, profile, balance, active game and archive survive entry switc
   await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('1000');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');await expect(page.locator('#balance')).toHaveText('100000');
   await page.goto(root+'tablet.html');await expect(page.locator('#game-status')).toContainText('White to move');
   await page.locator('[data-tab=archive]').click();await expect(page.locator('.archive-item')).toHaveCount(1);
-  await page.locator('[data-tab=settings]').click();await page.locator('#animation-duration').selectOption('0');await page.reload();await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('0');
+  await page.locator('[data-tab=settings]').click();await page.locator('#animation-duration').selectOption('0');
+  // Preference writes are queued IndexedDB transactions. Wait for durability
+  // before unloading the page; selectOption only waits for the change event.
+  await expect.poll(()=>page.evaluate(async()=> (await (await import('./storage.js')).read()).profiles[0].prefs.animationDuration)).toBe(0);
+  await page.reload();await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('0');
 });
 for(const entry of ['','tablet.html']) test(`${entry||'desktop'}: real Arena transitions, pause and instant preference`,async({page})=>{
   await create(page,entry);

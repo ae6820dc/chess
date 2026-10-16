@@ -1,8 +1,7 @@
 import {cancelTransitions} from './animation.js';
 // UI geometry only. Game rules, engine searches, storage and clock data are independent.
 const $ = id => document.getElementById(id);
-const tablet = document.body.dataset.interface === 'tablet';
-const desktop = matchMedia(tablet ? '(min-width: 900px) and (min-height: 600px)' : '(min-width: 1000px) and (min-height: 600px)');
+const desktop = matchMedia('(min-width: 560px) and (orientation: landscape) and (min-height: 600px)');
 let pane = 'match';
 
 export function setPane(next) {
@@ -20,7 +19,7 @@ export function setUnlocked(unlocked) {
 }
 
 export function showGame() {
-  // Desktop keeps both panes. On mobile give the board all remaining space.
+  // Tall landscape keeps both panes; other screens close setup when play starts.
   if (!desktop.matches) setPane('none');
 }
 
@@ -41,7 +40,7 @@ function fitBoard(stage) {
   if(board.style.getPropertyValue('--board-size')!==`${size}px`)cancelTransitions();
   board.style.setProperty('--board-size', `${size}px`);
   stage.parentElement.style.setProperty('--fitted-size', `${size}px`);
-  board.style.setProperty('--piece-size', `${size * .087}px`);
+  board.style.setProperty('--piece-size', `${(size - 4) * .12}px`);
   board.style.setProperty('--coordinate-size', `${Math.min(10, size * .022)}px`);
 }
 
@@ -55,6 +54,6 @@ desktop.addEventListener('change', () => setPane(pane));
 $('match-toggle').onclick = () => setPane(pane === 'match' ? 'none' : 'match');
 $('history-toggle').onclick = () => setPane(pane === 'history' ? 'none' : 'history');
 $('panel-close')?.addEventListener('click',()=>{setPane('none');$('match-toggle').focus();});
-document.addEventListener('keydown',e=>{if(tablet&&e.key==='Escape')setPane('none');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setPane('none');});
 updateViewport();
-setPane(tablet&&!desktop.matches?'none':pane);
+setPane(document.body.dataset.interface === 'tablet'&&!desktop.matches?'none':pane);

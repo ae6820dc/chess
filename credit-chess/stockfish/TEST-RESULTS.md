@@ -1,5 +1,17 @@
 # Verification — 2026-10-16
 
+## Issue #6: maximum-size responsive boards
+
+`npm test`: **13 passed**. `npm run test:browser`: **42 passed**.
+Both entry points pass the existing gameplay, engine, storage, profile, backup,
+replay, animation and Arena regressions. Two new scenarios check 14 viewport
+sizes per entry, maximum board dimensions, contained pieces, accessible tools,
+rotations and zero document overflow.
+
+See [measurements, screenshots and limitations](docs/issue-6/README.md).
+
+# Verification — 2026-10-16
+
 ## Latest: issue #4 application identity and IndexedDB migration
 
 - `npm test`: 13 passed, 0 failed.
