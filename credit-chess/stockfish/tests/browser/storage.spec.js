@@ -15,7 +15,7 @@ async function seed(page,invalid=false){
 async function dump(page,name){return page.evaluate(name=>new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onsuccess=()=>{const d=r.result,t=d.transaction('data'),s=t.objectStore('data'),out={};s.openCursor().onsuccess=e=>{const c=e.target.result;if(c){out[c.key]=c.value;c.continue();}};t.oncomplete=()=>{d.close();resolve(out);};t.onerror=()=>reject(t.error);};}),name);}
 test('fixed IDs, atomic legacy migration, recovery records and shared persistence across interfaces',async({page})=>{
  const rows=await seed(page);
- await page.goto(path);await expect(page.locator('#profile-select')).toContainText('Legacy Player');
+ await page.goto(path);await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#notice')).toContainText('No profile');await expect(page.locator('#profile-select')).not.toContainText('Legacy Player');
  const ids=await page.evaluate(async()=>{const s=await import('./storage.js');return {program:s.PROGRAM_ID,key:s.STORAGE_KEY};});
  expect(ids.program).toMatch(/^[0-9a-f]{32}$/);expect(ids.key).toMatch(/^[0-9a-f]{16}$/);
  await expect(page.locator('#program-id')).toHaveText('Program ID: '+ids.program);

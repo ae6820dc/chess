@@ -10,9 +10,7 @@ const viewports = [
 const path = '/credit-chess/stockfish/';
 async function create(page) {
   await page.goto(path);
-  await page.locator('#profile-name').fill('Layout Player');
-  await page.locator('#create-password').fill('layout-password-123');
-  await page.locator('#create-form button').click();
+  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();
   await expect(page.locator('#club')).toBeVisible();
 }
 async function start(page) {
@@ -154,7 +152,7 @@ test('orientation changes, long notifications and keyboard focus preserve the sh
 
 test('small portrait and large balances remain accessible without document scrolling',async({page})=>{
   await page.setViewportSize({width:320,height:568});await create(page);await start(page);await playGeometry(page);
-  await page.evaluate(async()=>{const {mutate}=await import('./storage.js');await mutate(data=>{data.profiles[0].name='A long local profile name that still fits the validated limit';data.profiles[0].balance='9'.repeat(200);});});
+  await page.evaluate(async()=>{const {mutate}=await import('./storage.js');await mutate(data=>{data.profiles[0].balance='9'.repeat(200);});});
   await page.reload();await expect(page.locator('#club')).toBeVisible();await playGeometry(page);
   await page.locator('#balance').focus();await page.keyboard.press('End');await noDocumentScroll(page);
   expect(await page.locator('#balance').evaluate(e=>e.scrollWidth>e.clientWidth)).toBe(true);

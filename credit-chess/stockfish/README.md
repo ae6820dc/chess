@@ -13,7 +13,7 @@ Use `index.html` for the original desktop layout and `tablet.html` for phones
 and tablets. The tablet page adds its own stylesheet, spacious square board,
 compact landscape navigation and internally scrolling settings/history panels.
 Its footer links back to desktop. Both pages use the same origin, IndexedDB,
-session profile, credits, archives, themes and backups. Navigate in one tab;
+selected profile, credits, archives, themes and backups. Navigate in one tab;
 the existing writer lock still protects data from concurrent chess tabs.
 
 Preferences offers **Piece movement**: instant, 250, 400, **600 (default)**,
@@ -63,9 +63,11 @@ The browser tests use system Chromium at `/usr/bin/chromium`; set
 `--test-isolation=none`; it also prevents this environment's child-process test
 runner from reporting only file-level results.
 
-Latest local verification (2026-10-09): **13/13 domain/generator tests** and
-**18/18 Chromium integration tests passed** (including desktop/laptop, portrait,
-landscape and six fixed-viewport layout tests). Chromium 151.0.7922.173, Node 24.19.0.
+Latest local verification (2026-10-16): **13/13 domain/generator tests** and
+**40/40 Chromium integration tests passed**, including automatic local profiles,
+PIN rejection/cancellation, cross-entrypoint selection, backups and regression
+checks. Chromium 151.0.7922.173, Node 24.19.0.
+See [issue #5 verification](docs/issue-5/README.md).
 
 Automated coverage includes:
 
@@ -79,7 +81,7 @@ Automated coverage includes:
   and en passant followed by a genuine Stockfish reply.
 - Arbitrary-size exact integer stakes/balances, negative balance, frozen terms,
   duplicate settlement rejection, no credits in analysis or arena.
-- PBKDF2 authentication, wrong-password rejection, JSON schema validation,
+- Automatic generated profiles, creation PIN checks, persistent selection, JSON schema validation,
   AES-GCM encrypted backup round-trip, conflicts and recovery snapshot.
 - Offline reload via the scoped service worker, exclusion of a second writer tab,
   and an injected IndexedDB write failure followed by a successful durable retry.
@@ -93,7 +95,7 @@ Chromium. They do **not** establish physical Android 16 testing. See limitations
 
 ## Fixed-viewport interface (issue #2)
 
-After profile unlock the application fits the available viewport, with no
+On opening the application the application fits the available viewport, with no
 vertical or horizontal document scrolling. Desktop/laptop keep board/clocks
 left and compact controls, internally scrolling match settings and move history
 right. Mobile uses expandable Match settings/Move history panes; starting a game
@@ -161,13 +163,27 @@ accounts for intervening time without a write every clock tick. Finished and
 in-progress records include UCI moves, PGN, results, dates, stake, multiplier,
 difficulty, clocks and starting/ending balances.
 
-Passwords use a random 128-bit salt and **PBKDF2-SHA256, 310000 iterations**.
-An unlocked session persists in the current browser tab until “Lock profile”.
-This is **local-only convenience authentication, not server-backed security**.
-A device owner, script running in this origin, browser developer tools or a
-modified backup can access/alter records. It is impossible for a static app to
-provide tamper-proof financial security. UI actions cannot edit an active game's
-stake/result/multiplier or pay an archived game again.
+The application opens directly, without a login screen. In Settings, **Generate
+User** prompts for the creation PIN (`1111`) before creating anything. This PIN
+is only a guard against accidental creation, **not a security boundary**: it is
+in the static source and anyone with developer tools can bypass it. Cancel or
+an incorrect PIN leaves stored data unchanged. Usernames use four cryptographically
+random bytes, displayed as exactly eight uppercase hexadecimal characters, with
+collision checks inside the profile creation transaction. New profiles begin
+with 100000 imaginary credits.
+
+Settings lists all generated profiles and switches immediately without a
+password. Each profile keeps its games, credits and preferences. The selected
+profile is stored in IndexedDB and automatically resumes across reloads, closing
+and reopening the page, and navigation between desktop and tablet. A first visit
+opens an empty application with guidance in Settings; profile-dependent actions
+are disabled. Switching away pauses Arena; ordinary active-game clocks continue
+to run, including while another profile is selected.
+
+Legacy password profiles are no longer offered for login. Their records are
+retained for export/recovery compatibility; no entire database is deleted. A
+device owner, script on this origin, developer tools or modified backup can
+access or alter local records. Credits are imaginary and are not tamper-proof.
 
 Export regular backups. Browser data clearing, private-mode exit or storage
 eviction can delete profiles. The app requests persistent storage where
@@ -178,20 +194,19 @@ retry saves it and adjudicates any elapsed timeout before continuing.
 
 ## Backups and recovery
 
-Full device JSON includes **all profiles and password hashes**; treat it as
+Full device JSON includes **all profiles and games**, including any retained legacy password hashes; treat it as
 sensitive. `schemaVersion: 1` is required. Import checks identity uniqueness,
-known preferences, integer strings, password records, complete legal move
+known preferences, integer strings, generated username format/uniqueness (or retained legacy password records), complete legal move
 histories, timestamps, clock/status consistency and arena resource limits before
 writing. Resource bounds: 20 MB file, 1000 profiles, 10000 games, 10000 plies/game.
 No monetary precision is lost. Unsupported schemas and corrupt/encryption-failed
 backups are rejected, without partial writes.
 
 Conflicts **keep existing profile IDs and all their games**; only new profiles
-and their games are added. Same-name new profiles receive an imported suffix.
+and their games are added. Generated username collisions keep the existing profile; legacy names are disambiguated.
 The import reports added/conflicting counts. Every import stores one pre-import
 recovery snapshot, even when everything conflicts. Recovery swaps current and
-recovery data. Finish the current game before import/recovery. Imported profiles
-can then be unlocked normally. A backup is not a trusted proof of a financial
+recovery data. Finish the current game before import/recovery. Imported generated profiles appear in the Settings selector without passwords. A backup is not a trusted proof of a financial
 balance or a game's authenticity.
 
 Optional encrypted JSON uses a new random salt and 96-bit IV, PBKDF2-SHA256
@@ -331,5 +346,5 @@ database is retained unchanged. A completed migration is never replayed over new
 data, and an unmarked nonempty destination is rejected rather than overwritten.
 Reload or close all older chess tabs before using the updated app. Subsequent
 writes use only the new database; the retained legacy copy is not a live mirror.
-JSON/encrypted backup formats and schema version remain unchanged. Export regular
+JSON/encrypted backup schema remains version 1; generated profiles have `kind: "generated"` and no `auth` field. Export regular
 backups, especially before changing browsers or origins.

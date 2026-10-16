@@ -3,9 +3,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 const root='/credit-chess/stockfish/';
 async function create(page,entry='tablet.html') {
   await page.goto(root+entry);
-  await page.locator('#profile-name').fill('Tablet Tester');
-  await page.locator('#create-password').fill('tablet-password-123');
-  await page.locator('#create-form button').click();
+  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();
   await expect(page.locator('#club')).toBeVisible();
 }
 async function start(page) {

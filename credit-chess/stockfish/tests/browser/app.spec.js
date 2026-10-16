@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 const path='/credit-chess/stockfish/';
-async function create(page){await page.goto(path);await page.locator('#profile-name').fill('Test Player');await page.locator('#create-password').fill('test-password-123');await page.locator('#create-form button').click();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#balance')).toHaveText('100000');}
+async function create(page){await page.goto(path);await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#balance')).toHaveText('100000');}
 async function clock(page,seconds=30){await page.locator('#base').fill(String(seconds/60));await page.locator('#base').dispatchEvent('change');await page.locator('#increment').fill('0');await page.locator('#increment').dispatchEvent('change');}
 async function snapshot(page){return page.evaluate(async()=>await (await import('./storage.js')).read());}
 test('mobile real engine gameplay, illegal move rejection, clock, persisted preferences and active game',async({page})=>{
@@ -20,18 +20,16 @@ test('resignation debits a BigInt-safe stake exactly once and archive replays',a
  const data=await snapshot(page);expect(data.games[0].settled).toBe(true);await page.evaluate(async g=>{const {saveGame}=await import('./storage.js');await saveGame({...g,settled:false});},data.games[0]);await page.reload();await expect(page.locator('#balance')).toHaveText(balance);await expect(page.locator('#stake')).toHaveValue(data.games[0].stake);
  await page.locator('[data-tab=archive]').click();await page.getByRole('button',{name:'Replay',exact:true}).click();await expect(page.locator('#replay-status')).toContainText('Ply 0/0');
 });
-test('password authentication, schema validation, encrypted backup round-trip and recovery',async({page})=>{
+test('creation PIN, schema validation, encrypted backup round-trip and recovery',async({page})=>{
  await create(page);const outcome=await page.evaluate(async()=>{
   const s=await import('./storage.js'),data=await s.read();
-  let wrong=false,invalid=false;try{await s.authenticate(data.profiles[0],'wrong-password');}catch{wrong=true;}
-  await s.authenticate(data.profiles[0],'test-password-123');
+  let wrong=false,invalid=false;try{await s.createProfile('wrong');}catch{wrong=true;}
   const encrypted=await s.encryptBackup(data,'backup-password-123'),decoded=await s.decryptBackup(encrypted,'backup-password-123');
   try{await s.importBackup({...decoded,schemaVersion:999});}catch{invalid=true;}
-  const conflict=await s.importBackup(decoded);const second=await s.createProfile('Imported Friend','another-password');const before=await s.read();
-  const pristine={...before,profiles:[second],games:[]};await s.importBackup(pristine);await s.createProfile('Later Profile','later-password');await s.restoreRecovery();
+  const conflict=await s.importBackup(decoded);const second=await s.createProfile('1111');const before=await s.read();
+  const pristine={...before,profiles:[second],games:[]};await s.importBackup(pristine);await s.createProfile('1111');await s.restoreRecovery();
   return {wrong,invalid,equal:JSON.stringify(data)===JSON.stringify(decoded),conflict,count:(await s.read()).profiles.length};
  });expect(outcome).toEqual({wrong:true,invalid:true,equal:true,conflict:{addedProfiles:0,addedGames:0,conflicts:1},count:2});
- await page.locator('#logout').click();await page.locator('#login-password').fill('wrong-password');await page.locator('#login-form button').click();await expect(page.locator('#notice')).toContainText('Incorrect local password');await page.locator('#login-password').fill('test-password-123');await page.locator('#login-form button').click();await expect(page.locator('#club')).toBeVisible();
 });
 test('clock timeout on idle player persists once after reload',async({page})=>{
  await create(page);await clock(page,2);await page.locator('#new-game-form button[type=submit]').click();await expect(page.locator('#game-status')).toContainText('Time expired',{timeout:10000});await expect(page.locator('#balance')).toHaveText('99900');await page.reload();await expect(page.locator('#balance')).toHaveText('99900');expect((await snapshot(page)).games[0].result).toBe('0-1');

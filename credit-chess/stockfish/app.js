@@ -3,7 +3,7 @@ import {setUnlocked,showGame} from './layout.js';
 import {Chess} from './vendor/chess.js';
 import {StockfishAdapter} from './engine.js';
 import {DEFAULTS,chessFor,newGame,remaining,debit,timeout,play,finish,claimable,pgn,uci} from './core.js';
-import {read,mutate,createProfile,authenticate,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
+import {read,mutate,createProfile,isGenerated,selectProfile,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
 const $=id=>document.getElementById(id);
 let profile,prefs,game,selected=null,engines=[],generation=0,searching=false,openingWorker,opening=null,openingRequest=0,replayGame,replayPly=0,dragStart=null,canWrite=false;
 let storageBlocked=false,storageFailure='';
@@ -58,6 +58,7 @@ function applyPrefs(){
 }
 function payoutNote(){$('payout-note').textContent=`Win: +stake × ${prefs?.multipliers[$('difficulty').value]||'2'} · loss: −stake · draw: 0. Terms are locked when the game starts.`;}
 async function capturePrefs(){
+ if(!profile)throw Error('Create or select a profile in Settings first');
  const base=Number($('base').value)*60,increment=Number($('increment').value);
  if(!Number.isFinite(base)||base<1||base>86400||!Number.isFinite(increment)||increment<0||increment>3600)throw Error('Choose a base of 1 second–24 hours and an increment of 0–3600 seconds');
  if(!/^\d+$/.test($('stake').value))throw Error('Stake must be a non-negative whole integer');
@@ -153,23 +154,37 @@ async function loadOpening(rank=$('opening-rank').value){
  $('opening-status').textContent=`Sequence #${opening.rank} of ${result.total} · exact BigInt count`;$('opening-line').textContent=c.history().join(' → ')+'\n'+result.moves.join(' ');return opening;
 }
 async function renderArchive(){
- const data=await read();$('archive-list').replaceChildren();const games=data.games.filter(g=>g.profileId===profile.id).sort((a,b)=>b.created-a.created);
+ const data=await read();$('archive-list').replaceChildren();if(!profile){$('archive-list').textContent='Create or select a profile in Settings first.';return;}const games=data.games.filter(g=>g.profileId===profile.id).sort((a,b)=>b.created-a.created);
  if(!games.length){$('archive-list').textContent='Your first game will appear here.';return;}
  for(const g of games){const row=document.createElement('div');row.className='archive-item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=`${g.result} · ${g.reason||'In progress'} · ${g.mode}`;const detail=document.createElement('small');detail.textContent=`${new Date(g.created).toLocaleString()} · ${g.moves.length} plies · stake ${g.stake} × ${g.multiplier} · ${g.difficulty} · ${g.clock.base/60}+${g.clock.increment} · balance ${g.endingBalance??'pending'}`;info.append(title,detail);const actions=document.createElement('div');actions.className='actions';const replay=document.createElement('button');replay.textContent='Replay';replay.onclick=()=>{replayGame=g;replayPly=0;$('replay').showModal();renderReplay();};const exportBtn=document.createElement('button');exportBtn.textContent='Export PGN';exportBtn.onclick=()=>download(pgn(g),`chess-${g.id}.pgn`,'application/x-chess-pgn');actions.append(replay,exportBtn);row.append(info,actions);$('archive-list').append(row);}
 }
 function renderReplay(){boardView($('replay-board'),chessFor(replayGame,replayPly));$('replay-title').textContent=`Replay · ${replayGame.result}`;$('replay-status').textContent=`Ply ${replayPly}/${replayGame.moves.length} · ${chessFor(replayGame,replayPly).history().at(-1)||'Starting position'}`;$('replay-prev').disabled=replayPly===0;$('replay-next').disabled=replayPly===replayGame.moves.length;}
 function download(text,name,type='application/json'){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function unlocked(p){
- profile=p;prefs={...structuredClone(DEFAULTS),...p.prefs};sessionStorage.setItem('chess-profile',p.id);$('auth').hidden=true;$('club').hidden=false;$('logout').hidden=false;setUnlocked(true);applyPrefs();await refreshProfile();
+ closeEngines();selected=null;opening=null;profile=p;prefs={...structuredClone(DEFAULTS),...p.prefs};$('club').hidden=false;setUnlocked(true);await renderProfiles();applyPrefs();await refreshProfile();
  const data=await read(),games=data.games.filter(g=>g.profileId===p.id).sort((a,b)=>b.created-a.created);game=games.find(g=>g.status==='active')||games.find(g=>g.mode==='arena'&&g.arena?.pending)||games[0]||null;
- renderGame();if(game?.status==='active')showGame();notice('Profile unlocked · all data stays on this device');
+ renderGame();if(game?.status==='active')showGame();notice('Profile loaded · all data stays on this device');
  if(game?.status==='active'){if(timeout(game)){await persist();await ended();}else scheduleEngine();}else if(game?.arena?.pending)await nextArena();
 }
-async function lockProfile(){closeEngines();if(game?.status==='active'&&game.mode==='arena'){debit(game);game.clock.paused=true;game.revision++;await persist();}profile=null;game=null;sessionStorage.removeItem('chess-profile');$('club').hidden=true;$('logout').hidden=true;setUnlocked(false);$('replay').close();await renderAuth();}
-async function renderAuth(){const data=await read();$('auth').hidden=false;$('profile-select').replaceChildren();for(const p of data.profiles){const option=document.createElement('option');option.value=p.id;option.textContent=p.name;$('profile-select').append(option);}$('login-form').hidden=!data.profiles.length;notice('Local storage ready. Create or unlock a profile.');}
-$('create-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{if(!canWrite)throw Error('Another tab owns local storage');const p=await createProfile($('profile-name').value,$('create-password').value);$('create-password').value='';await unlocked(p);});};
-$('login-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const data=await read(),p=data.profiles.find(p=>p.id===$('profile-select').value);await authenticate(p,$('login-password').value);$('login-password').value='';await unlocked(p);});};
-$('logout').onclick=()=>enqueue(lockProfile);
+async function renderProfiles(){
+ const data=await read();$('profile-select').replaceChildren();
+ const placeholder=new Option('Select a user', '');placeholder.disabled=true;placeholder.selected=!profile;$('profile-select').append(placeholder);
+ for(const p of data.profiles.filter(isGenerated))$('profile-select').append(new Option(p.name,p.id,false,p.id===profile?.id));
+ for(const selector of ['#new-game-form','#arena-form','#multiplier-form'])for(const e of document.querySelector(selector).querySelectorAll('input,select,button'))e.disabled=!profile;
+ for(const id of ['theme','animation-duration','sound','opening-jump','opening-prev','opening-next','opening-play'])$(id).disabled=!profile;
+ $('profile-summary').hidden=!profile;
+}
+async function loadCurrent(){
+ closeEngines();profile=null;game=null;const data=await read(),p=data.profiles.find(p=>p.id===data.lastProfile&&isGenerated(p));
+ if(p)return unlocked(p);
+ prefs=structuredClone(DEFAULTS);$('club').hidden=false;setUnlocked(true);applyPrefs();await renderProfiles();renderGame();notice('No profile selected. Open Settings and use Generate User to create one.');
+}
+async function pauseForSwitch(){
+ if(game?.status==='active'&&game.mode==='arena'){closeEngines();debit(game);game.clock.paused=true;game.revision++;await persist();}
+}
+$('generate-user').onclick=()=>{$('creation-pin').returnValue='';$('pin').value='';$('creation-pin').showModal();};
+$('creation-pin').addEventListener('close',()=>{const pin=$('pin').value;$('pin').value='';if($('creation-pin').returnValue!=='generate')return;enqueue(async()=>{if(!canWrite)throw Error('Another tab owns local storage');if(pin!=='1111')throw Error('Incorrect creation PIN');await pauseForSwitch();await unlocked(await createProfile(pin));});});
+$('profile-select').onchange=()=>enqueue(async()=>{await pauseForSwitch();await unlocked(await selectProfile($('profile-select').value));});
 $('retry-save').onclick=()=>enqueue(async()=>{storageBlocked=false;ticking=false;timeout(game);await persist();notice('Game saved successfully.');if(game.status==='finished')await ended();else scheduleEngine();},true);
 for(const btn of document.querySelectorAll('[data-tab]'))btn.onclick=()=>tab(btn.dataset.tab);
 $('new-game-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{await capturePrefs();if(!await abandon())return;let sequence=[];if($('use-opening').checked)sequence=(await loadOpening()).moves;await launch($('mode').value,sequence);});};
@@ -187,13 +202,13 @@ $('arena-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{await captureP
 $('arena-pause').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='arena')return;closeEngines();if(timeout(game)){await persist();await ended();return;}debit(game);game.clock.paused=!game.clock.paused;game.clock.since=Date.now();game.revision++;await persist();scheduleEngine();});
 $('replay-prev').onclick=()=>{if(replayPly>0){replayPly--;renderReplay();}};$('replay-next').onclick=()=>{if(replayPly<replayGame.moves.length){replayPly++;renderReplay();}};$('replay-close').onclick=()=>{$('replay').close();};
 $('replay').addEventListener('close',cancelTransitions);
-$('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await read(),null,2),'stockfish-credit-chess-backup.json');notice('Backup exported. It contains sensitive local profiles and password hashes.');});
+$('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await read(),null,2),'stockfish-credit-chess-backup.json');notice('Backup exported. It contains sensitive local profiles and retained legacy records.');});
 $('export-encrypted').onclick=()=>enqueue(async()=>{const data=await encryptBackup(await read(),$('backup-password').value);download(JSON.stringify(data),'stockfish-credit-chess-encrypted.json');$('backup-password').value='';notice('Encrypted backup exported. Keep its password safe.');});
 $('import-file').onchange=()=>enqueue(async()=>{
  if(game?.status==='active')throw Error('Finish the current game before importing a backup');
- const file=$('import-file').files[0];if(!file)return;if(file.size>20*1024*1024)throw Error('Backup exceeds 20 MB');let input=JSON.parse(await file.text());if(input.encrypted)input=await decryptBackup(input,$('backup-password').value);const result=await importBackup(input);$('backup-password').value='';$('import-file').value='';notice(`Imported ${result.addedProfiles} profiles and ${result.addedGames} games; kept ${result.conflicts} conflicting records. A pre-import recovery copy is available.`);
+ const file=$('import-file').files[0];if(!file)return;if(file.size>20*1024*1024)throw Error('Backup exceeds 20 MB');let input=JSON.parse(await file.text());if(input.encrypted)input=await decryptBackup(input,$('backup-password').value);const result=await importBackup(input);await renderProfiles();$('backup-password').value='';$('import-file').value='';notice(`Imported ${result.addedProfiles} profiles and ${result.addedGames} games; kept ${result.conflicts} conflicting records. A pre-import recovery copy is available.`);
 });
-$('recover').onclick=()=>enqueue(async()=>{if(game?.status==='active')throw Error('Finish the current game before recovery');if(!confirm('Restore the pre-import snapshot? The current data will become the new recovery copy.'))return;await restoreRecovery();await lockProfile();notice('Pre-import data restored. Unlock a profile to continue.');});
+$('recover').onclick=()=>enqueue(async()=>{if(game?.status==='active')throw Error('Finish the current game before recovery');if(!confirm('Restore the pre-import snapshot? The current data will become the new recovery copy.'))return;await restoreRecovery();await loadCurrent();notice('Pre-import data restored.');});
 let ticking=false;
 setInterval(()=>{if(!profile||!game)return;renderClocks();if(storageBlocked)return;if(!ticking&&game.status==='active'&&!game.clock.paused&&remaining(game)[chessFor(game).turn()]<=0){ticking=true;enqueue(async()=>{try{if(timeout(game)){closeEngines();await persist();await ended();}}finally{ticking=false;}});}},200);
 window.addEventListener('pagehide',()=>{cancelTransitions();closeEngines();});
@@ -205,7 +220,7 @@ async function init(){
  navigator.locks.request('stockfish-credit-chess-writer',{ifAvailable:true},async lock=>{
   if(!lock){notice('Another chess tab is open. Close it and reload this page to protect clocks and credits.',true);return;}
   canWrite=true;
-  try {const data=await read(),session=sessionStorage.getItem('chess-profile'),p=data.profiles.find(x=>x.id===session);if(p)await unlocked(p);else await renderAuth();
+  try {await loadCurrent();
    if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').then(async reg=>{await navigator.serviceWorker.ready;$('storage-status').textContent='Offline cache ready. IndexedDB stores profiles and games.';}).catch(e=>{$('storage-status').textContent='Offline caching unavailable: '+e.message;});
    if(navigator.storage?.persist){navigator.storage.persist().then(granted=>{if(!granted)$('storage-status').textContent+=' Browser storage may be evicted; export regular backups.';});}
   }catch(e){notice('Local storage/application error: '+e.message+'. Reload to retry. Do not clear browser data without a backup.',true);}

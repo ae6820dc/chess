@@ -93,24 +93,25 @@ async function derive(password,salt,usage) {
  const spec={name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'};
  return usage?crypto.subtle.deriveKey(spec,base,{name:'AES-GCM',length:256},false,usage):new Uint8Array(await crypto.subtle.deriveBits(spec,base,256));
 }
-export async function createProfile(name,password) {
- name=name.trim();if(!name||name.length>60||password.length<8)throw Error('Use a name and a password of at least 8 characters');
- const salt=crypto.getRandomValues(new Uint8Array(16)),hash=await derive(password,salt);
- const profile={id:crypto.randomUUID(),name,auth:{salt:bytesToBase64(salt),hash:bytesToBase64(hash),iterations:310000},balance:'100000',prefs:structuredClone(DEFAULTS),created:Date.now()};
- await mutate(data=>{if(data.profiles.some(p=>p.name===name))throw Error('Profile name already exists');data.profiles.push(profile);data.lastProfile=profile.id;});return profile;
+export const isGenerated=p=>p?.kind==='generated'&&/^[0-9A-F]{8}$/.test(p.name)&&!p.auth;
+export async function createProfile(pin) {
+ if(pin!=='1111')throw Error('Incorrect creation PIN');
+ return mutate(data=>{
+  if(data.profiles.length>=1000)throw Error('Profile limit reached');
+  let name;
+  do{name=Array.from(crypto.getRandomValues(new Uint8Array(4)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}while(data.profiles.some(p=>p.name===name));
+  const profile={id:crypto.randomUUID(),kind:'generated',name,balance:'100000',prefs:structuredClone(DEFAULTS),created:Date.now()};
+  data.profiles.push(profile);data.lastProfile=profile.id;return profile;
+ });
 }
-export async function authenticate(profile,password){
- const actual=await derive(password,fromBase64(profile.auth.salt)),expected=fromBase64(profile.auth.hash);let diff=actual.length^expected.length;
- for(let i=0;i<actual.length;i++)diff|=actual[i]^expected[i];if(diff)throw Error('Incorrect local password');
- return profile;
-}
+export async function selectProfile(id){return mutate(data=>{const p=data.profiles.find(p=>p.id===id&&isGenerated(p));if(!p)throw Error('Generated profile missing');data.lastProfile=id;return p;});}
 export function validateBackup(data){
  if(!data||data.schemaVersion!==SCHEMA||!Array.isArray(data.profiles)||!Array.isArray(data.games)||data.profiles.length>1000||data.games.length>10000)throw Error('Unsupported or invalid backup schema');
- const ids=new Set(),gids=new Set(),activeProfiles=new Set();
+ const names=new Set(),ids=new Set(),gids=new Set(),activeProfiles=new Set();
  for(const p of data.profiles){
   if(typeof p.id!=='string'||ids.has(p.id)||typeof p.name!=='string'||p.name.length>60||!p.name.trim())throw Error('Invalid profile');ids.add(p.id);
   integer(p.balance,'Balance',true);
-  if(p.auth?.iterations!==310000||fromBase64(p.auth.salt).length!==16||fromBase64(p.auth.hash).length!==32)throw Error('Invalid password record');
+  if(p.kind==='generated'){if(!isGenerated(p)||names.has(p.name))throw Error('Invalid generated username');names.add(p.name);}else if(p.auth?.iterations!==310000||fromBase64(p.auth.salt).length!==16||fromBase64(p.auth.hash).length!==32)throw Error('Invalid password record');
   const f=p.prefs;if(!f||!['wood','gold','green','midnight'].includes(f.theme)||!Number.isFinite(f.base)||f.base<1||f.base>86400||!Number.isFinite(f.increment)||f.increment<0||f.increment>3600||!['w','b'].includes(f.color)||typeof f.sound!=='boolean'||!['1320','2000','2800','3190','MAX'].includes(f.difficulty)||!Number.isInteger(f.openingDepth)||f.openingDepth<1||f.openingDepth>3)throw Error('Invalid preferences');
   if(f.animationDuration!==undefined&&![0,250,400,600,800,1000].includes(f.animationDuration))throw Error('Invalid animation duration');
   integer(f.openingRank,'Opening cursor');integer(f.stake,'Stake');for(const level of Object.keys(DEFAULTS.multipliers))integer(f.multipliers?.[level],'Multiplier');
@@ -128,11 +129,11 @@ export function validateBackup(data){
  return data;
 }
 export async function importBackup(input){
- const incoming=validateBackup(input);
+ const incoming=validateBackup(structuredClone(input));
  return mutate((data,store)=>{
   store.put(structuredClone(data),'recovery');let addedProfiles=0,addedGames=0,conflicts=0;
   const accepted=new Set();
-  for(const p of incoming.profiles){if(data.profiles.some(x=>x.id===p.id)){conflicts++;continue;}if(data.profiles.some(x=>x.name===p.name))p.name=p.name.slice(0,40)+' (imported '+p.id.slice(0,6)+')';data.profiles.push(structuredClone(p));accepted.add(p.id);addedProfiles++;}
+  for(const p of incoming.profiles){if(data.profiles.some(x=>x.id===p.id||(isGenerated(p)&&x.name===p.name))){conflicts++;continue;}if(data.profiles.some(x=>x.name===p.name))p.name=p.name.slice(0,40)+' (imported '+p.id.slice(0,6)+')';data.profiles.push(structuredClone(p));accepted.add(p.id);addedProfiles++;}
   for(const g of incoming.games){if(!accepted.has(g.profileId)||data.games.some(x=>x.id===g.id)){conflicts++;continue;}data.games.push(structuredClone(g));addedGames++;}
   return {addedProfiles,addedGames,conflicts};
  });
