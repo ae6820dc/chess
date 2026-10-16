@@ -5,7 +5,8 @@ import {StockfishAdapter} from './engine.js';
 import {DEFAULTS,chessFor,newGame,remaining,debit,timeout,play,finish,claimable,pgn,uci} from './core.js';
 import {read,mutate,createProfile,isGenerated,selectProfile,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
 const $=id=>document.getElementById(id);
-let profile,prefs,game,selected=null,engines=[],generation=0,searching=false,openingWorker,opening=null,openingRequest=0,replayGame,replayPly=0,dragStart=null,canWrite=false;
+let profile,prefs,game,selected=null,engines=[],generation=0,searching=false,openingWorker,opening=null,openingRequest=0,replayGame,replayPly=0,canWrite=false;
+let humanMoving=false,dropOrigin=null;
 let storageBlocked=false,storageFailure='';
 let queue=Promise.resolve();
 const enqueue=(fn,allowBlocked=false)=>{queue=queue.then(()=>{if(storageBlocked&&!allowBlocked)throw Error(storageFailure||'Saving is blocked. Keep this tab open and use Retry failed save.');return fn();}).catch(error=>notice(error.message,true));return queue;};
@@ -14,10 +15,15 @@ function closeEngines(){generation++;searching=false;for(const e of engines)e.cl
 const names={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const glyphs={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 export function boardView(target,chess,orientation='w',interactive=false){
+ if(target===$('board'))cancelDrag();
  const files=orientation==='w'?'abcdefgh':'hgfedcba',ranks=orientation==='w'?'87654321':'12345678';
  let destinations=[];
  if(interactive&&selected)destinations=chess.moves({square:selected,verbose:true}).map(m=>m.to);
  const transition=prepareTransition(target,chess,orientation);
+ if(target===$('board')&&dropOrigin){
+  const path=transition.find(path=>path.to===dropOrigin.to);if(path)path.rect=dropOrigin.rect;
+  dropOrigin=null;
+ }
  target.replaceChildren();
  for(const r of ranks)for(const f of files){
   const square=f+r,p=chess.get(square),el=document.createElement('button');el.type='button';el.className='square'+((f.charCodeAt(0)+Number(r))%2?' dark':'');el.dataset.square=square;
@@ -117,23 +123,88 @@ async function nextArena(){
 }
 function sound(){if(!prefs?.sound)return;try{const ctx=new (window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=480;gain.gain.value=.04;osc.connect(gain).connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.06);osc.onended=()=>ctx.close();}catch{}}
 async function promote(){return new Promise(resolve=>{const dialog=$('promotion');const done=value=>{dialog.close();dialog.removeEventListener('click',click);dialog.removeEventListener('cancel',cancel);resolve(value);};const click=e=>{const value=e.target.dataset.promotion;if(value)done(value==='cancel'?null:value);};const cancel=e=>{e.preventDefault();done(null);};dialog.addEventListener('click',click);dialog.addEventListener('cancel',cancel);dialog.showModal();});}
-async function humanMove(from,to){
- if(!game||game.status!=='active'||game.mode==='arena'||chessFor(game).turn()!==game.player)return;
+async function humanMove(from,to,rect){
+ if(humanMoving||!canInteract())return;
+ humanMoving=true;
+ try{
  const c=chessFor(game),options=c.moves({square:from,verbose:true}).filter(m=>m.to===to);
  if(!options.length)throw Error('That move is not legal');
  let promotion;if(options.some(m=>m.promotion)){promotion=await promote();if(!promotion)return;}
- const legal=play(game,{from,to,promotion});selected=null;if(legal)sound();await persist();if(game.status==='finished')await ended();else scheduleEngine();
+ const legal=play(game,{from,to,promotion});if(legal&&rect)dropOrigin={to,rect};selected=null;if(legal)sound();await persist();if(game.status==='finished')await ended();else scheduleEngine();
+ }finally{humanMoving=false;dropOrigin=null;}
 }
 function squareClick(square){enqueue(async()=>{
  if(!game||game.status!=='active'||game.mode==='arena'||chessFor(game).turn()!==game.player)return;
  const p=chessFor(game).get(square);
  if(selected&&square!==selected&&p?.color!==game.player){const from=selected;await humanMove(from,square);}else{selected=selected===square?null:(p?.color===game.player?square:null);renderGame();}
 });}
-$('board').addEventListener('click',e=>{if(suppressClick){suppressClick=false;return;}const square=e.target.closest('[data-square]')?.dataset.square;if(square)squareClick(square);});
-let suppressClick=false;
-$('board').addEventListener('pointerdown',e=>{dragStart=e.target.closest('[data-square]')?.dataset.square;});
-$('board').addEventListener('pointerup',e=>{const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-square]')?.dataset.square;if(dragStart&&target&&dragStart!==target){suppressClick=true;const from=dragStart;enqueue(()=>humanMove(from,target));}dragStart=null;});
-$('board').addEventListener('pointercancel',()=>{dragStart=null;});
+// Capture on the stable board, since rendering replaces its square buttons.
+const board=$('board');
+let drag=null,settling=null,suppressClick=false;
+function canInteract(){return !humanMoving&&!storageBlocked&&!searching&&game?.status==='active'&&game.mode!=='arena'&&chessFor(game).turn()===game.player;}
+function cancelDrag(){
+ settling?.();
+ if(!drag)return;
+ const d=drag;drag=null;
+ d.piece.style.visibility='';d.layer?.remove();
+ if(board.hasPointerCapture(d.id))board.releasePointerCapture(d.id);
+}
+board.addEventListener('click',e=>{
+ if(suppressClick&&e.detail!==0){e.preventDefault();e.stopPropagation();suppressClick=false;return;}
+ const square=(e.target.closest('[data-square]')||(e.detail?document.elementFromPoint(e.clientX,e.clientY)?.closest('#board [data-square]'):null))?.dataset.square;if(square&&!humanMoving)squareClick(square);
+});
+board.addEventListener('pointerdown',e=>{
+ if(!e.isPrimary||e.button!==0||drag)return;
+ suppressClick=false;
+ settling?.();
+ const square=e.target.closest('[data-square]')?.dataset.square;
+ if(!canInteract()||!square||chessFor(game).get(square)?.color!==game.player)return;
+ const piece=board.querySelector(`[data-square="${square}"] .piece`);
+ // Finish presentation animations before measuring the source square.
+ cancelTransitions();
+ drag={id:e.pointerId,from:square,piece,rect:piece.getBoundingClientRect(),x:e.clientX,y:e.clientY,game,revision:game.revision};
+ board.setPointerCapture(e.pointerId);
+});
+board.addEventListener('pointermove',e=>{
+ const d=drag;if(!d||e.pointerId!==d.id)return;
+ const dx=e.clientX-d.x,dy=e.clientY-d.y;
+ if(!d.layer&&Math.hypot(dx,dy)<4)return;
+ e.preventDefault();
+ if(!d.layer){
+  suppressClick=true;
+  d.layer=document.createElement('div');d.layer.className='drag-layer';d.layer.setAttribute('aria-hidden','true');
+  d.ghost=d.piece.cloneNode(true);d.ghost.classList.add('drag-piece');
+  const r=d.rect;
+  Object.assign(d.ghost.style,{position:'absolute',visibility:'visible',left:r.x+'px',top:r.y+'px',width:r.width+'px',height:r.height+'px',fontSize:getComputedStyle(d.piece).fontSize});
+  d.layer.append(d.ghost);document.body.append(d.layer);d.piece.style.visibility='hidden';
+ }
+ d.ghost.style.transform=`translate(${dx}px,${dy}px)`;
+},{passive:false});
+function releaseDrag(e,cancelled=false){
+ const d=drag;if(!d||e.pointerId!==d.id)return;
+ if(!d.layer){cancelDrag();return;}
+ e.preventDefault();suppressClick=true;
+ const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('#board [data-square]');
+ const to=el?.dataset.square;
+ const valid=!cancelled&&canInteract()&&game===d.game&&game.revision===d.revision&&chessFor(game).moves({square:d.from,verbose:true}).some(m=>m.to===to);
+ drag=null;
+ if(board.hasPointerCapture(d.id))board.releasePointerCapture(d.id);
+ let cleaned=false;
+ const cleanup=()=>{if(cleaned)return;cleaned=true;d.piece.style.visibility='';d.layer.remove();if(settling===cleanup)settling=null;};
+ if(valid){
+  const rect=d.ghost.getBoundingClientRect();
+  enqueue(()=>{if(game===d.game&&game.revision===d.revision)return humanMove(d.from,to,rect);}).finally(cleanup);
+ }else{
+  settling=cleanup;
+  const animation=d.ghost.animate([{transform:d.ghost.style.transform},{transform:'translate(0,0)'}],{duration:movementDuration(prefs?.animationDuration),easing:'ease-out',fill:'forwards'});
+  animation.finished.then(cleanup,cleanup);
+ }
+}
+board.addEventListener('pointerup',e=>releaseDrag(e));
+board.addEventListener('pointercancel',e=>releaseDrag(e,true));
+board.addEventListener('lostpointercapture',e=>releaseDrag(e,true));
+window.addEventListener('blur',cancelDrag);
+window.addEventListener('resize',cancelDrag);
 function generate(depth,rank){
  if(openingWorker)throw Error('An opening computation is already running');
  const request=++openingRequest;return new Promise((resolve,reject)=>{

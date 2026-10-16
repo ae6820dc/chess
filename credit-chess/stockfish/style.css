@@ -185,3 +185,7 @@ aside h2 { font-size:23px; margin-bottom:12px; }
   .unlocked footer { font-size:10px; padding-block:1px; }
 }
 @media (prefers-reduced-motion:no-preference) { button { transition:background .15s; } }
+
+/* A viewport overlay permits unrestricted dragging without enlarging the page. */
+.drag-layer { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:2147483647; }
+.drag-piece { position:absolute; display:block; line-height:1; font-family:'DejaVu Sans','Noto Sans Symbols 2',serif; pointer-events:none; transition:none; user-select:none; }
