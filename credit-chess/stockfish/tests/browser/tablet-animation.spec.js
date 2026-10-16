@@ -52,7 +52,7 @@ for(const [width,height] of sizes) test(`tablet ${width}x${height}: geometry, to
   expect(await page.locator('#replay-board').evaluate(e=>e.getAnimations({subtree:true}).length)).toBe(0);
   await page.locator('#replay-close').click();expect(errors).toEqual([]);
 });
-for(const entry of ['','tablet.html']) test(`${entry||'desktop'}: animation special moves, rapid navigation and reduced motion`,async({page})=>{
+for(const entry of ['desktop.html','tablet.html']) test(`${entry||'desktop'}: animation special moves, rapid navigation and reduced motion`,async({page})=>{
   await create(page,entry);
   const results=await page.evaluate(async()=>{
     const {boardView}=await import('./app.js'),{Chess}=await import('./vendor/chess.js');
@@ -101,7 +101,7 @@ test('tablet orientation and adjustable durations preserve aligned positions and
 test('preferences, profile, balance, active game and archive survive entry switching and refresh',async({page})=>{
   await create(page);await start(page);
   await page.locator('[data-tab=settings]').click();await page.locator('#animation-duration').selectOption('1000');await page.locator('#theme').selectOption('midnight');
-  await page.goto(root);await expect(page.locator('#club')).toBeVisible();
+  await page.goto(root+'desktop.html');await expect(page.locator('#club')).toBeVisible();
   await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('1000');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');await expect(page.locator('#balance')).toHaveText('100000');
   await page.goto(root+'tablet.html');await expect(page.locator('#game-status')).toContainText('White to move');
   await page.locator('[data-tab=archive]').click();await expect(page.locator('.archive-item')).toHaveCount(1);
@@ -111,7 +111,7 @@ test('preferences, profile, balance, active game and archive survive entry switc
   await expect.poll(()=>page.evaluate(async()=> (await (await import('./storage.js')).read()).profiles[0].prefs.animationDuration)).toBe(0);
   await page.reload();await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('0');
 });
-for(const entry of ['','tablet.html']) test(`${entry||'desktop'}: real Arena transitions, pause and instant preference`,async({page})=>{
+for(const entry of ['desktop.html','tablet.html']) test(`${entry||'desktop'}: real Arena transitions, pause and instant preference`,async({page})=>{
   await create(page,entry);
   await page.evaluate(()=>{
     const animate=Element.prototype.animate;window.transitions=[];

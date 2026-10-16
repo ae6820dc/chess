@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 const path='/credit-chess/stockfish/';
-async function create(page){await page.goto(path);await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#balance')).toHaveText('100000');}
+async function create(page){await page.goto(path+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#balance')).toHaveText('100000');}
 async function clock(page,seconds=30){await page.locator('#base').fill(String(seconds/60));await page.locator('#base').dispatchEvent('change');await page.locator('#increment').fill('0');await page.locator('#increment').dispatchEvent('change');}
 async function snapshot(page){return page.evaluate(async()=>await (await import('./storage.js')).read());}
 test('mobile real engine gameplay, illegal move rejection, clock, persisted preferences and active game',async({page})=>{
@@ -47,7 +47,7 @@ test('exact opening worker cursor persists, arena starts from it with independen
  await page.waitForTimeout(400);await page.reload();await expect(page.locator('#game-status')).toHaveText('Arena paused');const restored=await snapshot(page);expect(restored.games[0].clock).toEqual(clocks);await page.locator('#arena-pause').click();await expect.poll(async()=>(await snapshot(page)).games[0].moves.length).toBeGreaterThan(data.games[0].moves.length);
 });
 test('a second tab cannot write credits concurrently',async({page,context})=>{
- await create(page);const second=await context.newPage();await second.goto(path);await expect(second.locator('#notice')).toContainText('Another chess tab');await expect(second.locator('#club')).toBeHidden();await second.close();
+ await create(page);const second=await context.newPage();await second.goto(path+'desktop.html');await expect(second.locator('#notice')).toContainText('Another chess tab');await expect(second.locator('#club')).toBeHidden();await second.close();
 });
 test('arena completes a series, archives both games and progresses without rewards',async({page})=>{
  await create(page);await clock(page,1);await page.locator('[data-tab=openings]').click();await page.locator('#opening-depth').selectOption('1');await page.locator('#opening-rank').fill('0');await page.locator('#opening-jump').click();await expect(page.locator('#opening-status')).toContainText('of 20');

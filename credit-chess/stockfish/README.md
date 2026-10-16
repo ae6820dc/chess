@@ -1,3 +1,15 @@
+## Choose a version
+
+Open `index.html` for the manual, responsive version chooser. Choose **Desktop**
+(`desktop.html`) or **Tablet** (`tablet.html`). The app logo in either version
+returns to the chooser. All three entrypoints are available offline after the
+service worker finishes caching them.
+
+Both layouts use the same unchanged storage module, Program ID, Storage Key,
+IndexedDB namespace and active profile. Returning to the chooser does not modify
+saved games, credits or preferences. Keep using the same browser and origin to
+access existing data.
+
 # Stockfish Credit Chess
 
 Static chess application for `ae6820dc/chess`. Desktop and tablet/phone entry points share all game, engine and storage modules.
@@ -9,7 +21,7 @@ not `file://`. All gameplay code, chess.js and Stockfish WASM are bundled.
 
 ## Desktop, phones and tablets
 
-Both `index.html` and `tablet.html` maximize the board across phones, tablets
+Both `desktop.html` and `tablet.html` maximize the board across phones, tablets
 and desktop screens using the shared responsive layout. The tablet entry retains
 its link back to the main entry. Both pages use the same origin, IndexedDB,
 selected profile, credits, archives, themes and backups. Navigate in one tab;
@@ -94,7 +106,7 @@ Chromium. They do **not** establish physical Android 16 testing. See limitations
 
 ## Board-first responsive interface (issue #6)
 
-Both `index.html` and `tablet.html` use the shared `board-layout.css` geometry.
+Both `desktop.html` and `tablet.html` use the shared `board-layout.css` geometry.
 Portrait screens give the board the full width with 4 px side gutters; controls
 and clocks remain outside the squares. Landscape screens put navigation,
 notifications, account details, gameplay actions and panels in a compact right

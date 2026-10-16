@@ -5,7 +5,7 @@ async function generate(page,pin='1111',cancel=false){
  await page.locator('#generate-user').click();await page.locator('#pin').fill(pin);
  await page.locator(`#pin-form button[value=${cancel?'cancel':'generate'}]`).click();
 }
-for(const entry of ['index.html','tablet.html'])test(`${entry}: empty visit, PIN, switching, durable selection and backups`,async({page,context})=>{
+for(const entry of ['desktop.html','tablet.html'])test(`${entry}: empty visit, PIN, switching, durable selection and backups`,async({page,context})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(root+entry);
  await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#notice')).toContainText('No profile');
  await expect(page.locator('#new-game-form button[type=submit]')).toBeDisabled();
@@ -20,7 +20,7 @@ for(const entry of ['index.html','tablet.html'])test(`${entry}: empty visit, PIN
  await page.locator('[data-tab=settings]').click();await generate(page);await expect(page.locator('#balance')).toHaveText('100000');
  const data=await snapshot(page);expect(data.profiles).toHaveLength(2);expect(data.profiles[1].name).not.toBe(first.name);
  await page.locator('#profile-select').selectOption(first.id);await expect(page.locator('#balance')).toHaveText('99900');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');
- await page.goto(root+(entry==='index.html'?'tablet.html':'index.html'));await expect(page.locator('#balance')).toHaveText('99900');await expect(page.locator('#game-status')).toContainText('Player resigned');
+ await page.goto(root+(entry==='desktop.html'?'tablet.html':'desktop.html'));await expect(page.locator('#balance')).toHaveText('99900');await expect(page.locator('#game-status')).toContainText('Player resigned');
  await page.reload();await expect(page.locator('#balance')).toHaveText('99900');
  // A fresh tab after closing the original must use IndexedDB, not tab session storage.
  await page.close();page=await context.newPage();await page.goto(root+entry);await expect(page.locator('#balance')).toHaveText('99900');
@@ -29,7 +29,7 @@ for(const entry of ['index.html','tablet.html'])test(`${entry}: empty visit, PIN
  await page.locator('#profile-select').selectOption(first.id);await expect(page.locator('#balance')).toHaveText('99900');expect((await snapshot(page)).games).toEqual(saved.games);expect(errors).toEqual([]);
 });
 test('collision retries, format validation and name conflicts preserve existing generated records',async({page})=>{
- await page.goto(root);await expect(page.locator('#club')).toBeVisible();
+ await page.goto(root+'desktop.html');await expect(page.locator('#club')).toBeVisible();
  const result=await page.evaluate(async()=>{
   const s=await import('./storage.js'),original=crypto.getRandomValues.bind(crypto);let calls=0;
   crypto.getRandomValues=array=>{array.fill(calls++<2?0:255);return array;};

@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {mkdir,writeFile} from 'node:fs/promises';
 const sizes=[[320,568],[360,800],[412,915],[600,960],[768,1024],[568,320],[640,360],[844,390],[915,412],[1024,768],[1024,1366],[1366,768],[1920,1080],[2560,1440]];
-for(const entry of ['index.html','tablet.html']) {
+for(const entry of ['desktop.html','tablet.html']) {
   test(`${entry}: maximum board across screen sizes and rotations`,async({page})=>{
     await page.goto('/credit-chess/stockfish/'+entry);
     await expect(page.locator('#board .square')).toHaveCount(64);
