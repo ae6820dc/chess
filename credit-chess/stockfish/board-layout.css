@@ -101,7 +101,7 @@
   .play-layout[data-pane=match] #history-panel,.play-layout[data-pane=history] #match-panel { display:none!important; }
   .play-layout[data-pane=history] #history-panel { display:grid!important; }
   #history-panel .eyebrow { display:none; }
-  #history-panel { grid-template-rows:auto minmax(0,1fr); }
+  #history-panel { grid-template-rows:auto auto minmax(60px,1fr); }
 }
 /* On the shortest phones, expanded tools temporarily use the control rail.
    The board and both clocks stay unobstructed at their full playing size. */

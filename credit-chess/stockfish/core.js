@@ -12,7 +12,7 @@ export function newGame(profile, prefs, mode='rated', opening=[], now=Date.now()
  const stake=integer(prefs.stake,'Stake'); const multiplier=integer(prefs.multipliers[prefs.difficulty],'Multiplier');
  if(!['rated','analysis','arena'].includes(mode)) throw Error('Invalid mode');
  if(!Number.isFinite(prefs.base)||prefs.base<1||prefs.base>86400||!Number.isFinite(prefs.increment)||prefs.increment<0||prefs.increment>3600) throw Error('Clock outside supported limits');
- const game={id:crypto.randomUUID(),profileId:profile.id,mode,moves:[...opening],openingPlies:opening.length,created:now,updated:now,finished:null,status:'active',result:'*',reason:'',stake,multiplier,difficulty:prefs.difficulty,player:prefs.color,clock:{base:prefs.base,increment:prefs.increment,w:prefs.base*1000,b:prefs.base*1000,since:now,paused:false},settled:false,revision:0,startingBalance:profile.balance,endingBalance:null};
+ const game={id:crypto.randomUUID(),profileId:profile.id,mode,premoves:[],moves:[...opening],openingPlies:opening.length,created:now,updated:now,finished:null,status:'active',result:'*',reason:'',stake,multiplier,difficulty:prefs.difficulty,player:prefs.color,clock:{base:prefs.base,increment:prefs.increment,w:prefs.base*1000,b:prefs.base*1000,since:now,paused:false},settled:false,revision:0,startingBalance:profile.balance,endingBalance:null};
  chessFor(game); return game;
 }
 export function remaining(game, now=Date.now()) {
@@ -32,7 +32,7 @@ export function materialCanMate(chess, side) {
 }
 export function finish(game,result,reason,now=Date.now()) {
  if(game.status!=='active') return false;
- debit(game,now); Object.assign(game,{status:'finished',result,reason,finished:now,updated:now});game.clock.paused=true;game.revision++;return true;
+ debit(game,now); Object.assign(game,{premoves:[],status:'finished',result,reason,finished:now,updated:now});game.clock.paused=true;game.revision++;return true;
 }
 export function timeout(game,now=Date.now()) {
  if(game.status!=='active'||game.clock.paused) return false;

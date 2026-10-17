@@ -105,3 +105,37 @@ underpromotion and en passant; no engine responses were mocked.
 
 Physical Android 16/AVD and long mobile battery/memory sessions were **not run**.
 See README for remaining limitations and optional features not implemented.
+
+## Unlimited premove queue — 2026-10-17
+
+Final verification in the managed Linux environment:
+
+- `npm test`: **33 passed, 0 failed**.
+- `npm run test:browser`: **60 passed, 0 failed** (3.0 minutes).
+- `git diff --check`: passed.
+
+Added domain coverage for 1, 10, 100 and 1,000 intentions, incremental projection,
+undo, serialization, ten consecutive opponent responses, at most one automatic
+move per response, illegal check evasion cancellation without position/clock
+mutation, legal check blocking, castling, captures, en passant, every promotion,
+checkmate, clock debit/increment/expiry, paused/opponent turns, and malformed
+planning coordinates.
+
+Added deterministic browser coverage for click planning, actual/planned view,
+undo/clear, autosave/restoration, account isolation with 10/100/1,000 intentions,
+virtualized list scrolling (at most 18 rendered rows), mouse and touch dragging,
+instant automatic execution, illegal cancellation, and engine requests containing
+only actual legal history rather than projected intentions.
+
+The complete existing browser suite also passed: real Stockfish WASM, normal
+click and mouse/touch/pen drag movement, special moves, animation speeds and
+reduced motion, credits, clocks, accounts, IndexedDB migration and failed saves,
+backups, offline restoration, openings, Arena, and desktop/tablet/phone layouts.
+Both entry points passed board geometry checks at 14 sizes from 320×568 through
+2560×1440, including short landscape and orientation changes. A mobile queue
+screenshot was inspected manually.
+
+Browser tests use system Chromium and touch/viewport emulation. Physical Android
+and iOS devices and Safari were not tested. Initial layout regressions were fixed
+before the final clean run above. GitHub Pages deployment status could not be
+queried from this environment: the GitHub Pages API request returned Forbidden.

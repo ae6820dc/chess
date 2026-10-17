@@ -364,3 +364,27 @@ Reload or close all older chess tabs before using the updated app. Subsequent
 writes use only the new database; the retained legacy copy is not a live mirror.
 JSON/encrypted backup schema remains version 1; generated profiles have `kind: "generated"` and no `auth` field. Export regular
 backups, especially before changing browsers or origins.
+
+### Unlimited premoves
+
+While Stockfish is thinking, click a piece and destination or drag it to prepare
+an intention. Continue from the projected position to add more; there is no queue
+length limit. Open **Move history → Premoves** for the count, ordered scrollable
+list, **Undo Last Premove**, **Clear Queue**, and the actual/planned position toggle.
+The label beside the top clock identifies the displayed position.
+
+The projection moves only your pieces. It never supplies an opponent reply.
+Pawn diagonals can express a future capture or en passant; castling and all four
+promotion choices are supported. Blocked paths and friendly occupied destinations
+must first be opened in the projection. Every intention is conditional: captures,
+checks, castling rights and opponent replies can invalidate it. Only the first
+intention is checked against the real game after each engine move. If illegal,
+the entire dependent queue is cleared with a notification. A legal premove uses
+the normal clock/increment/adjudication path, without presentation animation.
+Manual moves retain the configured animation speed.
+
+Queues belong to their existing game/profile records and are included in autosave,
+restoration, backups and offline caching. Old records without a queue remain
+compatible. Queues clear on termination or analysis undo. Queue editing never
+pauses the clock. Only a small visible window of list rows is rendered, and the
+planning projection updates incrementally when adding or undoing intentions.

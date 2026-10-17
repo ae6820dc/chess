@@ -1,3 +1,4 @@
+import {validIntent} from './premoves.js';
 import { chessFor, integer, payout, pgn, DEFAULTS } from './core.js';
 export const SCHEMA=1;
 export const empty=()=>({schemaVersion:SCHEMA,profiles:[],games:[],lastProfile:null});
@@ -118,6 +119,7 @@ export function validateBackup(data){
  }
  for(const g of data.games){
   if(typeof g.id!=='string'||gids.has(g.id)||!ids.has(g.profileId)||!['rated','analysis','arena'].includes(g.mode)||!['active','finished'].includes(g.status)||!['*','1-0','0-1','1/2-1/2'].includes(g.result)||!['w','b'].includes(g.player)||!['1320','2000','2800','3190','MAX'].includes(g.difficulty)||typeof g.reason!=='string')throw Error('Invalid game');gids.add(g.id);
+  if(g.premoves!==undefined&&(!Array.isArray(g.premoves)||!g.premoves.every(validIntent)))throw Error('Invalid premove queue');
   integer(g.stake,'Stake');integer(g.multiplier,'Multiplier');integer(g.startingBalance,'Starting balance',true);if(g.endingBalance!==null)integer(g.endingBalance,'Ending balance',true);
   if(!Array.isArray(g.moves)||g.moves.length>10000||g.moves.some(m=>typeof m!=='string'||! /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m))||!Number.isInteger(g.openingPlies)||g.openingPlies<0||g.openingPlies>g.moves.length)throw Error('Invalid moves');chessFor(g);
   if(!g.clock||typeof g.clock.paused!=='boolean'||!Number.isFinite(g.clock.base)||g.clock.base<1||g.clock.base>86400||!Number.isFinite(g.clock.increment)||g.clock.increment<0||g.clock.increment>3600||['w','b','since'].some(k=>!Number.isFinite(g.clock[k])||g.clock[k]<0)||!Number.isInteger(g.revision)||g.revision<0||![g.created,g.updated].every(Number.isFinite)||typeof g.settled!=='boolean')throw Error('Invalid clock or timestamps');

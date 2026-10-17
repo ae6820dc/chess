@@ -1,3 +1,4 @@
+import {Plan,executePremove} from './premoves.js';
 import {prepareTransition,animateTransition,movementDuration,cancelTransitions} from './animation.js';
 import {setUnlocked,showGame} from './layout.js';
 import {Chess} from './vendor/chess.js';
@@ -6,7 +7,26 @@ import {DEFAULTS,chessFor,newGame,remaining,debit,timeout,play,finish,claimable,
 import {read,mutate,createProfile,isGenerated,selectProfile,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
 const $=id=>document.getElementById(id);
 let profile,prefs,game,selected=null,engines=[],generation=0,searching=false,openingWorker,opening=null,openingRequest=0,replayGame,replayPly=0,canWrite=false;
-let humanMoving=false,dropOrigin=null;
+let humanMoving=false,dropOrigin=null,plan=null,planKey='',showPlan=true,instant=false;
+function planning(){return game?.status==='active'&&game.mode!=='arena'&&(chessFor(game).turn()!==game.player||!!game.premoves?.length);}
+function planningPosition(){
+ const key=game.id+':'+game.moves.length+':'+game.player;
+ if(!plan||planKey!==key){plan=new Plan(chessFor(game),game.player,game.premoves||[]);planKey=key;}
+ return plan;
+}
+function inputPosition(){return planning()?planningPosition():chessFor(game);}
+function inputDestinations(c,from){return c instanceof Plan?c.destinations(from):c.moves({square:from,verbose:true}).map(m=>m.to);}
+function renderQueue(){
+ const moves=game?.premoves||[],list=$('premove-list');
+ $('premove-count').textContent=String(moves.length);
+ $('premove-clear').disabled=$('premove-undo').disabled=!moves.length||storageBlocked;
+ $('premove-view').textContent=showPlan?'Show actual position':'Show planned position';
+ $('position-label').textContent=planning()&&showPlan?'PLANNED':'ACTUAL';
+ const start=Math.max(0,Math.min(moves.length-1,Math.floor(list.scrollTop/28)-3)),end=Math.min(moves.length,start+18);
+ list.replaceChildren();const spacer=h=>{const el=document.createElement('div');el.style.height=h+'px';list.append(el);};spacer(start*28);
+ for(let i=start;i<end;i++){const el=document.createElement('div');el.className='premove-row';el.setAttribute('role','listitem');el.setAttribute('aria-posinset',i+1);el.setAttribute('aria-setsize',moves.length);el.textContent=`${i+1}. ${moves[i].slice(0,2)} → ${moves[i].slice(2,4)}${moves[i][4]?' = '+moves[i][4].toUpperCase():''} · conditional`;list.append(el);}spacer((moves.length-end)*28);
+}
+
 let storageBlocked=false,storageFailure='';
 let queue=Promise.resolve();
 const enqueue=(fn,allowBlocked=false)=>{queue=queue.then(()=>{if(storageBlocked&&!allowBlocked)throw Error(storageFailure||'Saving is blocked. Keep this tab open and use Retry failed save.');return fn();}).catch(error=>notice(error.message,true));return queue;};
@@ -18,8 +38,9 @@ export function boardView(target,chess,orientation='w',interactive=false){
  if(target===$('board'))cancelDrag();
  const files=orientation==='w'?'abcdefgh':'hgfedcba',ranks=orientation==='w'?'87654321':'12345678';
  let destinations=[];
- if(interactive&&selected)destinations=chess.moves({square:selected,verbose:true}).map(m=>m.to);
- const transition=prepareTransition(target,chess,orientation);
+ if(interactive&&selected)destinations=inputDestinations(chess,selected);
+ const paths=prepareTransition(target,chess instanceof Plan?chessFor(game):chess,orientation);
+ const transition=chess instanceof Plan||instant?[]:paths;
  if(target===$('board')&&dropOrigin){
   const path=transition.find(path=>path.to===dropOrigin.to);if(path)path.rect=dropOrigin.rect;
   dropOrigin=null;
@@ -34,7 +55,7 @@ export function boardView(target,chess,orientation='w',interactive=false){
   if(interactive&&game?.moves.length){const m=game.moves.at(-1);if(m.slice(0,2)===square||m.slice(2,4)===square)el.classList.add('last');}
   if(!interactive)el.tabIndex=-1;target.append(el);
  }
- animateTransition(target,transition,prefs?.animationDuration);
+ animateTransition(target,transition,instant?0:prefs?.animationDuration);
 }
 function renderClocks(){
  const g=game,clocks=g?remaining(g):{w:(prefs?.base||600)*1000,b:(prefs?.base||600)*1000};
@@ -45,7 +66,7 @@ function renderClocks(){
 }
 function clockText(ms){const s=Math.ceil(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 function renderGame(){
- const c=game?chessFor(game):new Chess();boardView($('board'),c,game?.mode==='arena'?'w':(game?.player||prefs?.color||'w'),true);renderClocks();
+ const c=game?chessFor(game):new Chess();boardView($('board'),planning()&&showPlan&&(selected||game.premoves?.length)?planningPosition():c,game?.mode==='arena'?'w':(game?.player||prefs?.color||'w'),true);renderClocks();renderQueue();
  $('moves').replaceChildren();for(const san of c.history()){const li=document.createElement('li');li.textContent=san;$('moves').append(li);}$('moves').scrollTop=$('moves').scrollHeight;
  const active=game?.status==='active';
  $('game-status').textContent=!game?'Choose your match and start a game.':active?(game.clock.paused?'Arena paused':`${c.turn()==='w'?'White':'Black'} to move${c.isCheck()?' · Check':''} · ${game.mode==='rated'?'Credits game':game.mode}`):`${game.result} · ${game.reason}${game.mode==='rated'?' · Balance '+profile.balance:''}`;
@@ -85,7 +106,7 @@ async function abandon(){
  return true;
 }
 async function launch(mode,sequence=[],arena=null){
- closeEngines();selected=null;game=newGame(profile,prefs,mode,sequence);if(arena)game.arena=arena;
+ closeEngines();selected=null;plan=null;showPlan=true;game=newGame(profile,prefs,mode,sequence);if(arena)game.arena=arena;
  await persist();tab('play');showGame();scheduleEngine();
 }
 function scheduleEngine(){
@@ -103,7 +124,10 @@ function scheduleEngine(){
   if(token!==generation||game?.id!==id||game.status!=='active'||game.clock.paused)return;
   searching=false;
   if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move))throw Error('Engine returned no playable move');
-  const legal=play(game,{from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]});if(legal)sound();await persist();
+  const legal=play(game,{from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]});if(legal)sound();
+  const premove=legal?executePremove(game):'none';selected=null;plan=null;
+  instant=premove==='played';try{await persist();}finally{instant=false;}
+  if(premove==='invalid')notice('Premove is no longer legal. The queue was cleared; no player move was made.',true);
   if(game.status==='finished')await ended();else scheduleEngine();
  });}).catch(error=>enqueue(async()=>{
   if(token!==generation||game?.id!==id)return;closeEngines();
@@ -127,21 +151,29 @@ async function humanMove(from,to,rect){
  if(humanMoving||!canInteract())return;
  humanMoving=true;
  try{
- const c=chessFor(game),options=c.moves({square:from,verbose:true}).filter(m=>m.to===to);
+ const c=inputPosition();
+ if(planning()){
+  if(!showPlan)throw Error('Switch to the planned position to add premoves');
+  if(!c.accepts(from,to))throw Error('That intention cannot be planned from this position');
+  let promotion;if(c.get(from)?.type==='p'&&['1','8'].includes(to[1])){promotion=await promote();if(!promotion)return;}
+  const m=from+to+(promotion||'');(game.premoves??=[]).push(m);c.apply(m);game.revision++;selected=null;
+  renderGame();await persist();return;
+ }
+ const options=c.moves({square:from,verbose:true}).filter(m=>m.to===to);
  if(!options.length)throw Error('That move is not legal');
  let promotion;if(options.some(m=>m.promotion)){promotion=await promote();if(!promotion)return;}
  const legal=play(game,{from,to,promotion});if(legal&&rect)dropOrigin={to,rect};selected=null;if(legal)sound();await persist();if(game.status==='finished')await ended();else scheduleEngine();
  }finally{humanMoving=false;dropOrigin=null;}
 }
 function squareClick(square){enqueue(async()=>{
- if(!game||game.status!=='active'||game.mode==='arena'||chessFor(game).turn()!==game.player)return;
- const p=chessFor(game).get(square);
+ if(!canInteract())return;
+ const p=inputPosition().get(square);
  if(selected&&square!==selected&&p?.color!==game.player){const from=selected;await humanMove(from,square);}else{selected=selected===square?null:(p?.color===game.player?square:null);renderGame();}
 });}
 // Capture on the stable board, since rendering replaces its square buttons.
 const board=$('board');
 let drag=null,settling=null,suppressClick=false;
-function canInteract(){return !humanMoving&&!storageBlocked&&!searching&&game?.status==='active'&&game.mode!=='arena'&&chessFor(game).turn()===game.player;}
+function canInteract(){return !humanMoving&&!storageBlocked&&game?.status==='active'&&game.mode!=='arena'&&(!planning()||showPlan);}
 function cancelDrag(){
  settling?.();
  if(!drag)return;
@@ -158,7 +190,7 @@ board.addEventListener('pointerdown',e=>{
  suppressClick=false;
  settling?.();
  const square=e.target.closest('[data-square]')?.dataset.square;
- if(!canInteract()||!square||chessFor(game).get(square)?.color!==game.player)return;
+ if(!canInteract()||!square||inputPosition().get(square)?.color!==game.player)return;
  const piece=board.querySelector(`[data-square="${square}"] .piece`);
  // Finish presentation animations before measuring the source square.
  cancelTransitions();
@@ -186,7 +218,7 @@ function releaseDrag(e,cancelled=false){
  e.preventDefault();suppressClick=true;
  const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('#board [data-square]');
  const to=el?.dataset.square;
- const valid=!cancelled&&canInteract()&&game===d.game&&game.revision===d.revision&&chessFor(game).moves({square:d.from,verbose:true}).some(m=>m.to===to);
+ const valid=!cancelled&&canInteract()&&game===d.game&&game.revision===d.revision&&inputDestinations(inputPosition(),d.from).includes(to);
  drag=null;
  if(board.hasPointerCapture(d.id))board.releasePointerCapture(d.id);
  let cleaned=false;
@@ -232,7 +264,7 @@ async function renderArchive(){
 function renderReplay(){boardView($('replay-board'),chessFor(replayGame,replayPly));$('replay-title').textContent=`Replay · ${replayGame.result}`;$('replay-status').textContent=`Ply ${replayPly}/${replayGame.moves.length} · ${chessFor(replayGame,replayPly).history().at(-1)||'Starting position'}`;$('replay-prev').disabled=replayPly===0;$('replay-next').disabled=replayPly===replayGame.moves.length;}
 function download(text,name,type='application/json'){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function unlocked(p){
- closeEngines();selected=null;opening=null;profile=p;prefs={...structuredClone(DEFAULTS),...p.prefs};$('club').hidden=false;setUnlocked(true);await renderProfiles();applyPrefs();await refreshProfile();
+ closeEngines();selected=null;plan=null;showPlan=true;opening=null;profile=p;prefs={...structuredClone(DEFAULTS),...p.prefs};$('club').hidden=false;setUnlocked(true);await renderProfiles();applyPrefs();await refreshProfile();
  const data=await read(),games=data.games.filter(g=>g.profileId===p.id).sort((a,b)=>b.created-a.created);game=games.find(g=>g.status==='active')||games.find(g=>g.mode==='arena'&&g.arena?.pending)||games[0]||null;
  renderGame();if(game?.status==='active')showGame();notice('Profile loaded · all data stays on this device');
  if(game?.status==='active'){if(timeout(game)){await persist();await ended();}else scheduleEngine();}else if(game?.arena?.pending)await nextArena();
@@ -253,6 +285,13 @@ async function loadCurrent(){
 async function pauseForSwitch(){
  if(game?.status==='active'&&game.mode==='arena'){closeEngines();debit(game);game.clock.paused=true;game.revision++;await persist();}
 }
+$('premove-list').addEventListener('scroll',renderQueue);
+$('premove-view').onclick=()=>{showPlan=!showPlan;selected=null;renderGame();};
+for(const [id,undo] of [['premove-clear',false],['premove-undo',true]])$(id).onclick=()=>enqueue(async()=>{
+ if(!game?.premoves?.length)return;
+ if(undo){game.premoves.pop();plan?.undo();}else{game.premoves=[];plan=null;}
+ game.revision++;selected=null;renderGame();await persist();
+});
 $('generate-user').onclick=()=>{$('creation-pin').returnValue='';$('pin').value='';$('creation-pin').showModal();};
 $('creation-pin').addEventListener('close',()=>{const pin=$('pin').value;$('pin').value='';if($('creation-pin').returnValue!=='generate')return;enqueue(async()=>{if(!canWrite)throw Error('Another tab owns local storage');if(pin!=='1111')throw Error('Incorrect creation PIN');await pauseForSwitch();await unlocked(await createProfile(pin));});});
 $('profile-select').onchange=()=>enqueue(async()=>{await pauseForSwitch();await unlocked(await selectProfile($('profile-select').value));});
@@ -262,7 +301,7 @@ $('new-game-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{await captu
 $('move-form').onsubmit=e=>{e.preventDefault();enqueue(()=>humanMove($('from').value.toLowerCase(),$('to').value.toLowerCase()));};
 $('resign').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode==='arena')return;closeEngines();finish(game,game.player==='w'?'0-1':'1-0','Player resigned');await persist();await ended();});
 $('claim').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode==='arena'||chessFor(game).turn()!==game.player||!claimable(game))return;closeEngines();finish(game,'1/2-1/2','Player claimed 50-move rule or threefold repetition');await persist();await ended();});
-$('undo').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='analysis'||game.moves.length<=game.openingPlies)return;if(timeout(game)){await persist();await ended();return;}closeEngines();debit(game);do{game.moves.pop();}while(game.moves.length>game.openingPlies&&chessFor(game).turn()!==game.player);game.clock.since=Date.now();game.revision++;selected=null;await persist();scheduleEngine();});
+$('undo').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='analysis'||game.moves.length<=game.openingPlies)return;if(timeout(game)){await persist();await ended();return;}closeEngines();debit(game);do{game.moves.pop();}while(game.moves.length>game.openingPlies&&chessFor(game).turn()!==game.player);game.clock.since=Date.now();game.premoves=[];plan=null;game.revision++;selected=null;await persist();scheduleEngine();});
 $('preset').onchange=()=>enqueue(async()=>{if($('preset').value!=='custom'){const [base,increment]=$('preset').value.split(',').map(Number);$('base').value=base/60;$('increment').value=increment;}await capturePrefs();if(!game)renderClocks();});
 for(const id of ['difficulty','color','stake','base','increment'])$(id).onchange=()=>enqueue(async()=>{await capturePrefs();if(!game)renderGame();});
 $('animation-duration').onchange=()=>enqueue(async()=>{prefs.animationDuration=Number($('animation-duration').value);cancelTransitions();await savePrefs(profile.id,prefs);});
