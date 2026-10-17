@@ -1,5 +1,5 @@
 import { Chess } from './vendor/chess.js';
-export const DEFAULTS = {theme:'wood',animationDuration:600,sound:false,stake:'100',base:600,increment:5,difficulty:'1320',color:'w',openingDepth:2,openingRank:'0',multipliers:{'1320':'2','2000':'3','2800':'5','3190':'8',MAX:'10'}};
+export const DEFAULTS = {theme:'wood',responseDelay:0,animationDuration:600,sound:false,stake:'100',base:600,increment:5,difficulty:'1320',color:'w',openingDepth:2,openingRank:'0',multipliers:{'1320':'2','2000':'3','2800':'5','3190':'8',MAX:'10'}};
 export const uci = m => m.from + m.to + (m.promotion || '');
 export function chessFor(game, ply = game.moves.length) {
  const chess = new Chess(); for(const m of game.moves.slice(0,ply)) chess.move({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]}); return chess;

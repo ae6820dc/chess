@@ -139,3 +139,19 @@ Browser tests use system Chromium and touch/viewport emulation. Physical Android
 and iOS devices and Safari were not tested. Initial layout regressions were fixed
 before the final clean run above. GitHub Pages deployment status could not be
 queried from this environment: the GitHub Pages API request returned Forbidden.
+
+## Response delay verification — 2026-10-17
+
+- Node 24: all 33 domain/generator/premove tests passed.
+- Chromium: full 67-test integration run passed (60 existing regressions and
+  seven response-delay scenarios).
+- Expanded response-delay suite: 16/16 passed, covering 0, 1, 2, 5, 10, 20,
+  30, 60 and custom 300 seconds with browser virtual time; no extra wait after
+  a longer search; premove editing and one intention per response; engine clock
+  debit and timeout; undo, resignation, replacement and profile cancellation;
+  custom preference reload and invalid-value rejection.
+- Backup validation separately passed for the new preference, omitted legacy
+  preference and rejection of values above 300.
+- Existing suite includes genuine Stockfish WASM, drag/touch/click input,
+  animations, Arena, autosave, accounts, credits, migration and offline reload.
+- Desktop/tablet Chromium emulation; no physical device testing performed.

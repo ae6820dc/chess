@@ -7,6 +7,7 @@ import {DEFAULTS,chessFor,newGame,remaining,debit,timeout,play,finish,claimable,
 import {read,mutate,createProfile,isGenerated,selectProfile,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
 const $=id=>document.getElementById(id);
 let profile,prefs,game,selected=null,engines=[],generation=0,searching=false,openingWorker,opening=null,openingRequest=0,replayGame,replayPly=0,canWrite=false;
+let delayedMove=null;
 let humanMoving=false,dropOrigin=null,plan=null,planKey='',showPlan=true,instant=false;
 function planning(){return game?.status==='active'&&game.mode!=='arena'&&(chessFor(game).turn()!==game.player||!!game.premoves?.length);}
 function planningPosition(){
@@ -31,7 +32,7 @@ let storageBlocked=false,storageFailure='';
 let queue=Promise.resolve();
 const enqueue=(fn,allowBlocked=false)=>{queue=queue.then(()=>{if(storageBlocked&&!allowBlocked)throw Error(storageFailure||'Saving is blocked. Keep this tab open and use Retry failed save.');return fn();}).catch(error=>notice(error.message,true));return queue;};
 function notice(text,error=false){$('notice').textContent=text;$('notice').classList.toggle('error',error);}
-function closeEngines(){generation++;searching=false;for(const e of engines)e.close();engines=[];$('engine-status').textContent='Engine idle';}
+function closeEngines(){delayedMove?.();delayedMove=null;generation++;searching=false;for(const e of engines)e.close();engines=[];$('engine-status').textContent='Engine idle';}
 const names={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 const glyphs={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 export function boardView(target,chess,orientation='w',interactive=false){
@@ -77,6 +78,9 @@ function renderGame(){
 function tab(name){cancelTransitions();for(const e of document.querySelectorAll('.tab'))e.hidden=e.id!=='tab-'+name;for(const e of document.querySelectorAll('[data-tab]'))e.classList.toggle('active',e.dataset.tab===name);if(name==='archive')enqueue(renderArchive);}
 function applyPrefs(){
  document.body.dataset.theme=prefs.theme;
+ const delay=prefs.responseDelay??0;
+ $('response-delay').value=[0,1,2,5,10,20,30,60].includes(delay)?String(delay):'custom';
+ $('response-delay-custom').value=delay;$('response-delay-custom').hidden=$('response-delay').value!=='custom';
  $('animation-duration').value=movementDuration(prefs.animationDuration,false);
  for(const id of ['theme','difficulty','color','stake'])$(id).value=prefs[id];$('sound').checked=prefs.sound;
  $('base').value=prefs.base/60;$('increment').value=prefs.increment;const preset=`${prefs.base},${prefs.increment}`;$('preset').value=['600,5','300,3','180,2'].includes(preset)?preset:'custom';
@@ -114,14 +118,26 @@ function scheduleEngine(){
  const c=chessFor(game);if(game.mode!=='arena'&&c.turn()===game.player)return;
  const required=game.mode==='arena'?2:1;
  if(!engines.length){for(let i=0;i<required;i++){const engine=new StockfishAdapter(message=>{$('engine-status').textContent=message;});engine.ready.catch(()=>{});engines.push(engine);}}
- const engine=engines[game.mode==='arena'?(c.turn()==='w'?0:1):0],token=generation,id=game.id;
+ const engine=engines[game.mode==='arena'?(c.turn()==='w'?0:1):0],token=generation,id=game.id,position=game.moves.join(' '),deadline=game.clock.since+(game.mode==='arena'?0:(prefs.responseDelay??0)*1000);
+ const current=()=>token===generation&&game?.id===id&&game.status==='active'&&!game.clock.paused&&game.moves.join(' ')===position;
  searching=true;$('engine-status').textContent='Stockfish thinking…';const left=remaining(game),time=Math.min(game.mode==='arena'?game.arena.speed:600,Math.max(1,left[c.turn()]-20));
  engine.move({moves:[...game.moves],difficulty:game.difficulty,milliseconds:time,clocks:left,increment:Math.floor(game.clock.increment*1000)}).then(async move=>{
-  // Search immediately at the requested budget; only Arena presentation waits.
+  if(!current())return;
+  // An absolute deadline includes search/loading/save time and survives reload.
+  const wait=Math.max(0,deadline-Date.now());
+  if(wait){
+   $('engine-status').textContent='Stockfish response delayed · clock running';
+   await new Promise(resolve=>{
+    const timer=setTimeout(()=>{delayedMove=null;resolve();},wait);
+    delayedMove=()=>{clearTimeout(timer);resolve();};
+   });
+  }
+  if(!current())return;
+  // Search immediately; Arena retains its existing animation cadence.
   // The running clock still records real wall-clock time, including playback cadence.
   if(game?.mode==='arena'){const animations=$('board').getAnimations({subtree:true});if(animations.length){await Promise.allSettled(animations.map(a=>a.finished));await new Promise(resolve=>setTimeout(resolve,150));}}
   return enqueue(async()=>{
-  if(token!==generation||game?.id!==id||game.status!=='active'||game.clock.paused)return;
+  if(!current())return;
   searching=false;
   if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move))throw Error('Engine returned no playable move');
   const legal=play(game,{from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]});if(legal)sound();
@@ -274,7 +290,7 @@ async function renderProfiles(){
  const placeholder=new Option('Select a user', '');placeholder.disabled=true;placeholder.selected=!profile;$('profile-select').append(placeholder);
  for(const p of data.profiles.filter(isGenerated))$('profile-select').append(new Option(p.name,p.id,false,p.id===profile?.id));
  for(const selector of ['#new-game-form','#arena-form','#multiplier-form'])for(const e of document.querySelector(selector).querySelectorAll('input,select,button'))e.disabled=!profile;
- for(const id of ['theme','animation-duration','sound','opening-jump','opening-prev','opening-next','opening-play'])$(id).disabled=!profile;
+ for(const id of ['theme','animation-duration','response-delay','response-delay-custom','sound','opening-jump','opening-prev','opening-next','opening-play'])$(id).disabled=!profile;
  $('profile-summary').hidden=!profile;
 }
 async function loadCurrent(){
@@ -304,6 +320,12 @@ $('claim').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode==
 $('undo').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='analysis'||game.moves.length<=game.openingPlies)return;if(timeout(game)){await persist();await ended();return;}closeEngines();debit(game);do{game.moves.pop();}while(game.moves.length>game.openingPlies&&chessFor(game).turn()!==game.player);game.clock.since=Date.now();game.premoves=[];plan=null;game.revision++;selected=null;await persist();scheduleEngine();});
 $('preset').onchange=()=>enqueue(async()=>{if($('preset').value!=='custom'){const [base,increment]=$('preset').value.split(',').map(Number);$('base').value=base/60;$('increment').value=increment;}await capturePrefs();if(!game)renderClocks();});
 for(const id of ['difficulty','color','stake','base','increment'])$(id).onchange=()=>enqueue(async()=>{await capturePrefs();if(!game)renderGame();});
+for(const id of ['response-delay','response-delay-custom'])$(id).onchange=()=>enqueue(async()=>{
+ const custom=$('response-delay').value==='custom';$('response-delay-custom').hidden=!custom;
+ const raw=custom?$('response-delay-custom').value:$('response-delay').value,value=Number(raw);
+ if(!raw.trim()||!Number.isFinite(value)||value<0||value>300)throw Error('Response delay must be 0–300 seconds');
+ prefs.responseDelay=value;await savePrefs(profile.id,prefs);
+});
 $('animation-duration').onchange=()=>enqueue(async()=>{prefs.animationDuration=Number($('animation-duration').value);cancelTransitions();await savePrefs(profile.id,prefs);});
 $('theme').onchange=()=>enqueue(async()=>{prefs.theme=$('theme').value;document.body.dataset.theme=prefs.theme;await savePrefs(profile.id,prefs);});$('sound').onchange=()=>enqueue(async()=>{prefs.sound=$('sound').checked;await savePrefs(profile.id,prefs);});
 $('multiplier-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const multipliers={};for(const input of document.querySelectorAll('[data-level]')){if(!/^\d+$/.test(input.value))throw Error('Multipliers must be whole non-negative integers');multipliers[input.dataset.level]=BigInt(input.value).toString();}prefs.multipliers=multipliers;await savePrefs(profile.id,prefs);payoutNote();notice('Multipliers saved. Existing game terms stay locked.');});};
@@ -316,7 +338,7 @@ $('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await rea
 $('export-encrypted').onclick=()=>enqueue(async()=>{const data=await encryptBackup(await read(),$('backup-password').value);download(JSON.stringify(data),'stockfish-credit-chess-encrypted.json');$('backup-password').value='';notice('Encrypted backup exported. Keep its password safe.');});
 $('import-file').onchange=()=>enqueue(async()=>{
  if(game?.status==='active')throw Error('Finish the current game before importing a backup');
- const file=$('import-file').files[0];if(!file)return;if(file.size>20*1024*1024)throw Error('Backup exceeds 20 MB');let input=JSON.parse(await file.text());if(input.encrypted)input=await decryptBackup(input,$('backup-password').value);const result=await importBackup(input);await renderProfiles();$('backup-password').value='';$('import-file').value='';notice(`Imported ${result.addedProfiles} profiles and ${result.addedGames} games; kept ${result.conflicts} conflicting records. A pre-import recovery copy is available.`);
+ const file=$('import-file').files[0];if(!file)return;if(file.size>20*1024*1024)throw Error('Backup exceeds 20 MB');let input=JSON.parse(await file.text());if(input.encrypted)input=await decryptBackup(input,$('backup-password').value);closeEngines();const result=await importBackup(input);await renderProfiles();$('backup-password').value='';$('import-file').value='';notice(`Imported ${result.addedProfiles} profiles and ${result.addedGames} games; kept ${result.conflicts} conflicting records. A pre-import recovery copy is available.`);
 });
 $('recover').onclick=()=>enqueue(async()=>{if(game?.status==='active')throw Error('Finish the current game before recovery');if(!confirm('Restore the pre-import snapshot? The current data will become the new recovery copy.'))return;await restoreRecovery();await loadCurrent();notice('Pre-import data restored.');});
 let ticking=false;

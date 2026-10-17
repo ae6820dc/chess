@@ -388,3 +388,19 @@ restoration, backups and offline caching. Old records without a queue remain
 compatible. Queues clear on termination or analysis undo. Queue editing never
 pauses the clock. Only a small visible window of list rows is rendered, and the
 planning projection updates incrementally when adding or undoing intentions.
+
+### Stockfish response delay
+
+Preferences in both layouts offer 0 (default), 1, 2, 5, 10, 20, 30 and 60
+seconds, or a custom value from 0 to 300 seconds. This per-profile setting
+applies to the next human-versus-engine turn; Arena retains its own cadence.
+The minimum response time starts when the player's move commits. Search,
+loading and saving time count toward it; a longer search adds no second delay.
+The engine clock keeps running, including while editing the Unlimited Premove
+Queue, and a timeout prevents the delayed move from committing. One queued
+intention is validated after each accepted response.
+
+Undo, replacement games, profile changes, termination, import, page exit and
+engine restart cancel pending responses. Reload uses the saved turn timestamp
+rather than starting a fresh delay. Existing preferences/backups without this
+field use zero; database keys, Program ID and backup schema remain unchanged.
