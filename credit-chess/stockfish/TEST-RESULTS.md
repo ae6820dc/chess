@@ -155,3 +155,23 @@ queried from this environment: the GitHub Pages API request returned Forbidden.
 - Existing suite includes genuine Stockfish WASM, drag/touch/click input,
   animations, Arena, autosave, accounts, credits, migration and offline reload.
 - Desktop/tablet Chromium emulation; no physical device testing performed.
+
+## Arena capacity verification — 2026-10-20
+
+- Node 24: 48/48 unit tests passed, including exact count serialization and
+  backup validation for 8,902, 100,000 and 1,000,000, plus invalid boundaries.
+- Chromium: 34/34 selected integration tests passed (Arena capacity, existing
+  gameplay, storage/migration and layout). Configuration was checked at desktop
+  1440 px, tablet 820 px and mobile 412 px for all three requested counts.
+- A large series advanced from opening rank 99 to 100 with 999,999 games
+  remaining, and stopped at the final depth-3 rank 8,901 without repetition.
+- A 501-result fixture verified bounded live history, 50-result archive pages,
+  complete JSON backup contents and exact recovery of chunk references. An
+  additional focused pass verified encrypted backups, recovery to a snapshot
+  without chunks, and atomic rollback on an injected archive quota failure.
+- Large-count configuration tests stalled engine searches and restored paused
+  series after reload. No million-game run or million-opening allocation was
+  performed. Existing two-game real-engine progression tests passed.
+- Full backups retain the existing 20 MB / 10,000-game resource bounds. Larger
+  histories stay on disk and are accessible through paged results and PGN export.
+- Browser coverage uses Chromium viewport emulation, not physical devices.

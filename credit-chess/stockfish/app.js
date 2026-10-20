@@ -1,10 +1,11 @@
+import {arenaCount} from './arena.js';
 import {Plan,executePremove} from './premoves.js';
 import {prepareTransition,animateTransition,movementDuration,cancelTransitions} from './animation.js';
 import {setUnlocked,showGame} from './layout.js';
 import {Chess} from './vendor/chess.js';
 import {StockfishAdapter} from './engine.js';
 import {DEFAULTS,chessFor,newGame,remaining,debit,timeout,play,finish,claimable,pgn,uci} from './core.js';
-import {read,mutate,createProfile,isGenerated,selectProfile,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
+import {read,readBackup,archivePage,mutate,createProfile,isGenerated,selectProfile,savePrefs,saveGame,encryptBackup,decryptBackup,importBackup,restoreRecovery} from './storage.js';
 const $=id=>document.getElementById(id);
 let profile,prefs,game,selected=null,engines=[],generation=0,searching=false,openingWorker,opening=null,openingRequest=0,replayGame,replayPly=0,canWrite=false;
 let delayedMove=null;
@@ -154,6 +155,7 @@ function scheduleEngine(){
 async function ended(){closeEngines();notice(`Game saved · ${game.reason}`);if(game.mode==='arena'&&game.arena.pending)await nextArena();}
 async function nextArena(){
  const previous=game;if(!previous?.arena?.pending)return;
+ await new Promise(resolve=>setTimeout(resolve,0));
  const rank=(BigInt(previous.arena.rank)+1n).toString();
  let result;try{result=await generate(previous.arena.depth,rank);}catch(e){previous.arena.pending=false;await mutate(data=>{const stored=data.games.find(g=>g.id===previous.id);stored.arena.pending=false;});notice('Arena series stopped: '+e.message);return;}
  const arena={...previous.arena,remaining:previous.arena.remaining-1,rank,pending:false};
@@ -272,10 +274,14 @@ async function loadOpening(rank=$('opening-rank').value){
  const c=new Chess();for(const m of result.moves)c.move({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]});
  $('opening-status').textContent=`Sequence #${opening.rank} of ${result.total} · exact BigInt count`;$('opening-line').textContent=c.history().join(' → ')+'\n'+result.moves.join(' ');return opening;
 }
-async function renderArchive(){
- const data=await read();$('archive-list').replaceChildren();if(!profile){$('archive-list').textContent='Create or select a profile in Settings first.';return;}const games=data.games.filter(g=>g.profileId===profile.id).sort((a,b)=>b.created-a.created);
+async function renderArchive(cursor=null,history=[]){
+ $('archive-list').replaceChildren();if(!profile){$('archive-list').textContent='Create or select a profile in Settings first.';return;}const {games,next}=await archivePage(profile.id,cursor);
  if(!games.length){$('archive-list').textContent='Your first game will appear here.';return;}
  for(const g of games){const row=document.createElement('div');row.className='archive-item';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=`${g.result} · ${g.reason||'In progress'} · ${g.mode}`;const detail=document.createElement('small');detail.textContent=`${new Date(g.created).toLocaleString()} · ${g.moves.length} plies · stake ${g.stake} × ${g.multiplier} · ${g.difficulty} · ${g.clock.base/60}+${g.clock.increment} · balance ${g.endingBalance??'pending'}`;info.append(title,detail);const actions=document.createElement('div');actions.className='actions';const replay=document.createElement('button');replay.textContent='Replay';replay.onclick=()=>{replayGame=g;replayPly=0;$('replay').showModal();renderReplay();};const exportBtn=document.createElement('button');exportBtn.textContent='Export PGN';exportBtn.onclick=()=>download(pgn(g),`chess-${g.id}.pgn`,'application/x-chess-pgn');actions.append(replay,exportBtn);row.append(info,actions);$('archive-list').append(row);}
+ const navigation=document.createElement('div');navigation.className='actions';
+ if(history.length){const back=document.createElement('button');back.textContent='Previous results';back.onclick=()=>enqueue(()=>renderArchive(history.at(-1),history.slice(0,-1)));navigation.append(back);}
+ if(next){const more=document.createElement('button');more.textContent='Next results';more.onclick=()=>enqueue(()=>renderArchive(next,[...history,cursor]));navigation.append(more);}
+ $('archive-list').append(navigation);
 }
 function renderReplay(){boardView($('replay-board'),chessFor(replayGame,replayPly));$('replay-title').textContent=`Replay · ${replayGame.result}`;$('replay-status').textContent=`Ply ${replayPly}/${replayGame.moves.length} · ${chessFor(replayGame,replayPly).history().at(-1)||'Starting position'}`;$('replay-prev').disabled=replayPly===0;$('replay-next').disabled=replayPly===replayGame.moves.length;}
 function download(text,name,type='application/json'){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -330,12 +336,12 @@ $('animation-duration').onchange=()=>enqueue(async()=>{prefs.animationDuration=N
 $('theme').onchange=()=>enqueue(async()=>{prefs.theme=$('theme').value;document.body.dataset.theme=prefs.theme;await savePrefs(profile.id,prefs);});$('sound').onchange=()=>enqueue(async()=>{prefs.sound=$('sound').checked;await savePrefs(profile.id,prefs);});
 $('multiplier-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const multipliers={};for(const input of document.querySelectorAll('[data-level]')){if(!/^\d+$/.test(input.value))throw Error('Multipliers must be whole non-negative integers');multipliers[input.dataset.level]=BigInt(input.value).toString();}prefs.multipliers=multipliers;await savePrefs(profile.id,prefs);payoutNote();notice('Multipliers saved. Existing game terms stay locked.');});};
 $('opening-jump').onclick=()=>enqueue(()=>loadOpening());$('opening-prev').onclick=()=>enqueue(()=>loadOpening((BigInt($('opening-rank').value)-1n).toString()));$('opening-next').onclick=()=>enqueue(()=>loadOpening((BigInt($('opening-rank').value)+1n).toString()));$('opening-cancel').onclick=()=>openingReject?.();$('opening-play').onclick=()=>{tab('play');$('use-opening').checked=true;};
-$('arena-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{await capturePrefs();if(!await abandon())return;const count=Number($('arena-count').value),speed=Number($('arena-speed').value);if(!Number.isInteger(count)||count<1||count>100||!Number.isInteger(speed)||speed<20||speed>2000)throw Error('Arena limits: 1–100 games, 20–2000 ms think time');const result=await loadOpening();await launch('arena',result.moves,{remaining:count,speed,depth:result.depth,rank:result.rank,pending:false});$('arena-status').textContent=`Series running · ${count} game(s) remaining`;});};
+$('arena-form').onsubmit=e=>{e.preventDefault();enqueue(async()=>{const count=arenaCount($('arena-count').value),speed=Number($('arena-speed').value);if(!Number.isInteger(speed)||speed<20||speed>2000)throw Error('Arena think time: 20–2000 ms');await capturePrefs();if(!await abandon())return;const result=await loadOpening();await launch('arena',result.moves,{remaining:count,speed,depth:result.depth,rank:result.rank,pending:false});$('arena-status').textContent=`Series running · ${count} game(s) remaining`;});};
 $('arena-pause').onclick=()=>enqueue(async()=>{if(game?.status!=='active'||game.mode!=='arena')return;closeEngines();if(timeout(game)){await persist();await ended();return;}debit(game);game.clock.paused=!game.clock.paused;game.clock.since=Date.now();game.revision++;await persist();scheduleEngine();});
 $('replay-prev').onclick=()=>{if(replayPly>0){replayPly--;renderReplay();}};$('replay-next').onclick=()=>{if(replayPly<replayGame.moves.length){replayPly++;renderReplay();}};$('replay-close').onclick=()=>{$('replay').close();};
 $('replay').addEventListener('close',cancelTransitions);
-$('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await read(),null,2),'stockfish-credit-chess-backup.json');notice('Backup exported. It contains sensitive local profiles and retained legacy records.');});
-$('export-encrypted').onclick=()=>enqueue(async()=>{const data=await encryptBackup(await read(),$('backup-password').value);download(JSON.stringify(data),'stockfish-credit-chess-encrypted.json');$('backup-password').value='';notice('Encrypted backup exported. Keep its password safe.');});
+$('export-json').onclick=()=>enqueue(async()=>{download(JSON.stringify(await readBackup()),'stockfish-credit-chess-backup.json');notice('Backup exported. It contains sensitive local profiles and retained legacy records.');});
+$('export-encrypted').onclick=()=>enqueue(async()=>{const data=await encryptBackup(await readBackup(),$('backup-password').value);download(JSON.stringify(data),'stockfish-credit-chess-encrypted.json');$('backup-password').value='';notice('Encrypted backup exported. Keep its password safe.');});
 $('import-file').onchange=()=>enqueue(async()=>{
  if(game?.status==='active')throw Error('Finish the current game before importing a backup');
  const file=$('import-file').files[0];if(!file)return;if(file.size>20*1024*1024)throw Error('Backup exceeds 20 MB');let input=JSON.parse(await file.text());if(input.encrypted)input=await decryptBackup(input,$('backup-password').value);closeEngines();const result=await importBackup(input);await renderProfiles();$('backup-password').value='';$('import-file').value='';notice(`Imported ${result.addedProfiles} profiles and ${result.addedGames} games; kept ${result.conflicts} conflicting records. A pre-import recovery copy is available.`);

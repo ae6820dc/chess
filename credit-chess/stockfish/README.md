@@ -261,7 +261,7 @@ history/PGN but use no play clock time; play begins at the resulting position.
 ## Motor Arena and adapter contract
 
 Initial arena: **Stockfish vs Stockfish**, two independent single-threaded
-workers, each with `Hash=16`, with 1–100 matches and 20–2000 ms maximum search
+workers, each with `Hash=16`, with 1–1,000,000 matches and 20–2000 ms maximum search
 budget per move. Actual clock remaining can reduce that budget. The selected
 Play clock and strength apply to both engines. They start at the selected
 opening and advance one exact sequence per completed game; the series stops
@@ -404,3 +404,19 @@ Undo, replacement games, profile changes, termination, import, page exit and
 engine restart cancel pending responses. Reload uses the saved turn timestamp
 rather than starting a fresh delay. Existing preferences/backups without this
 field use zero; database keys, Program ID and backup schema remain unchanged.
+
+Arena accepts any whole series count from 1 to 1,000,000 on desktop, tablet and
+mobile. Games run sequentially; one opening is requested by its BigInt rank at a
+time. Depth 3 currently supplies 8,902 openings. Series stop at the atlas end
+without repeating, even if the requested game count is larger. No series-sized
+game or opening array is allocated. Future random-access generators can supply
+larger collections without changing the series counter.
+
+Completed history spills into immutable 100-game IndexedDB chunks, with only
+chunk references in the live snapshot. Archive results are paged (50 per page),
+and recovery retains its original history manifest. Existing records, account
+IDs, credits, preferences and storage keys are retained. Full JSON/encrypted
+backups include chunked results within the existing 20 MB / 10,000-game import
+bounds; larger histories report an explicit error and remain available for
+individual PGN export through the archive. Disk quotas still apply; a failed
+save stops the engines and retains the existing Retry failed save behavior.

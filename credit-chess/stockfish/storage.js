@@ -1,3 +1,4 @@
+import {validArenaCount} from './arena.js';
 import {validIntent} from './premoves.js';
 import { chessFor, integer, payout, pgn, DEFAULTS } from './core.js';
 export const SCHEMA=1;
@@ -72,9 +73,64 @@ export async function read(key='snapshot') {
 export async function mutate(fn) {
  const d=await openStorage();return new Promise((resolve,reject)=>{
   const t=d.transaction('data','readwrite'),s=t.objectStore('data'),r=s.get('snapshot');let result;
-  r.onsuccess=()=>{try { const data=r.result||empty();result=fn(data,s);s.put(data,'snapshot'); }catch(e){t.abort();reject(e);}};
+  r.onsuccess=()=>{try { const data=r.result||empty();result=fn(data,s);archiveFinished(data,s);s.put(data,'snapshot'); }catch(e){t.abort();reject(e);}};
   t.oncomplete=()=>resolve(result);t.onerror=()=>reject(t.error || Error('IndexedDB write failed'));t.onabort=()=>reject(t.error || Error('Storage transaction aborted'));
  });
+}
+// Spill completed history in small immutable chunks in the existing data store.
+// Snapshot manifests contain small chunk references and ordering bounds, never
+// all archived game positions.
+// Keeping the manifest in the snapshot also makes recovery an exact, atomic swap.
+const HISTORY_CHUNK=100;
+function archiveFinished(data,store){
+ const candidates=data.games.filter(g=>g.mode==='arena'&&g.status==='finished'&&!g.arena?.pending);
+ if(candidates.length<=HISTORY_CHUNK*2)return;
+ // Keep the latest game for each profile available to the existing resume path.
+ const latest=new Map();for(const g of data.games){const old=latest.get(g.profileId);if(!old||g.created>=old.created)latest.set(g.profileId,g);}
+ const eligible=candidates.filter(g=>latest.get(g.profileId)!==g).sort((a,b)=>compareOrder(gameOrder(a),gameOrder(b)));
+ while(eligible.length>HISTORY_CHUNK){
+  const games=eligible.splice(0,HISTORY_CHUNK),key='history:'+crypto.randomUUID();
+  store.add(games,key);(data.historyChunks??=[]).push({key,oldest:gameOrder(games[0]),newest:gameOrder(games.at(-1)),profiles:[...new Set(games.map(g=>g.profileId))]});
+  const ids=new Set(games.map(g=>g.id));data.games=data.games.filter(g=>!ids.has(g.id));
+ }
+}
+async function historyChunk(key){
+ const games=await read(key);if(!Array.isArray(games))throw Error('Archived history is missing; existing records were retained');return games;
+}
+const gameOrder=g=>[g.created,g.id];
+const compareOrder=(a,b)=>a[0]-b[0]||a[1].localeCompare(b[1],'en');
+// Select a bounded page by (creation time, ID), including imported older games.
+// Manifest bounds skip chunks older than the page; only one chunk is read at
+// a time. Neither archive navigation nor normal autosaves load the full history.
+export async function archivePage(profileId,cursor=null,limit=50){
+ if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw Error('Invalid archive page size');
+ const data=await read();let games=[];
+ const add=rows=>{
+  games.push(...rows.filter(g=>g.profileId===profileId&&(!cursor||compareOrder(gameOrder(g),cursor)<0)));
+  games.sort((a,b)=>compareOrder(gameOrder(b),gameOrder(a)));games=games.slice(0,limit+1);
+ };
+ add(data.games);
+ const chunks=(data.historyChunks||[]).filter(c=>c.profiles.includes(profileId)).sort((a,b)=>compareOrder(b.newest,a.newest));
+ for(const chunk of chunks){
+  if(cursor&&compareOrder(chunk.oldest,cursor)>=0)continue;
+  if(games.length>limit&&compareOrder(chunk.newest,gameOrder(games.at(-1)))<0)break;
+  add(await historyChunk(chunk.key));
+ }
+ const more=games.length>limit;games=games.slice(0,limit);
+ return {games,next:more?gameOrder(games.at(-1)):null};
+}
+// Backups retain the existing import resource bounds. Fail explicitly rather
+// than exporting a partial history or loading an unbounded archive into RAM.
+export async function readBackup(){
+ const data=await read(),keys=data.historyChunks||[];delete data.historyChunks;
+ let bytes=new TextEncoder().encode(JSON.stringify(data)).length;
+ if(bytes>20*1024*1024||data.games.length>10000)throw Error('Full backup exceeds the existing 20 MB / 10,000 game limit');
+ for(const {key} of keys){
+  const games=await historyChunk(key);bytes+=new TextEncoder().encode(JSON.stringify(games)).length;
+  if(bytes>20*1024*1024||data.games.length+games.length>10000)throw Error('Full backup exceeds the existing 20 MB / 10,000 game limit. Results remain saved; export individual PGNs from the paged archive.');
+  data.games.push(...games);
+ }
+ return data;
 }
 export async function saveGame(game) {
  const snapshot=structuredClone(game);snapshot.pgn=pgn(snapshot);
@@ -107,6 +163,7 @@ export async function createProfile(pin) {
 }
 export async function selectProfile(id){return mutate(data=>{const p=data.profiles.find(p=>p.id===id&&isGenerated(p));if(!p)throw Error('Generated profile missing');data.lastProfile=id;return p;});}
 export function validateBackup(data){
+ if(data?.historyChunks!==undefined&&(!Array.isArray(data.historyChunks)||data.historyChunks.some(c=>!c||typeof c.key!=='string'||!/^history:[0-9a-f-]{36}$/.test(c.key)||!Array.isArray(c.oldest)||!Number.isFinite(c.oldest[0])||typeof c.oldest[1]!=='string'||!Array.isArray(c.newest)||!Number.isFinite(c.newest[0])||typeof c.newest[1]!=='string'||!Array.isArray(c.profiles)||c.profiles.some(id=>typeof id!=='string'))))throw Error('Invalid history manifest');
  if(!data||data.schemaVersion!==SCHEMA||!Array.isArray(data.profiles)||!Array.isArray(data.games)||data.profiles.length>1000||data.games.length>10000)throw Error('Unsupported or invalid backup schema');
  const names=new Set(),ids=new Set(),gids=new Set(),activeProfiles=new Set();
  for(const p of data.profiles){
@@ -126,12 +183,13 @@ export function validateBackup(data){
   if(!g.clock||typeof g.clock.paused!=='boolean'||!Number.isFinite(g.clock.base)||g.clock.base<1||g.clock.base>86400||!Number.isFinite(g.clock.increment)||g.clock.increment<0||g.clock.increment>3600||['w','b','since'].some(k=>!Number.isFinite(g.clock[k])||g.clock[k]<0)||!Number.isInteger(g.revision)||g.revision<0||![g.created,g.updated].every(Number.isFinite)||typeof g.settled!=='boolean')throw Error('Invalid clock or timestamps');
   if(g.status==='active'&&(g.result!=='*'||g.settled||g.finished!==null||activeProfiles.has(g.profileId)))throw Error('Invalid or duplicate active game');
   if(g.status==='active')activeProfiles.add(g.profileId);
-  if(g.mode==='arena'){const a=g.arena;if(!a||!Number.isInteger(a.remaining)||a.remaining<1||a.remaining>100||!Number.isInteger(a.speed)||a.speed<20||a.speed>2000||!Number.isInteger(a.depth)||a.depth<1||a.depth>3||typeof a.pending!=='boolean')throw Error('Invalid arena series');integer(a.rank,'Arena cursor');if(BigInt(a.rank)>=[0n,20n,400n,8902n][a.depth])throw Error('Invalid arena rank');}
+  if(g.mode==='arena'){const a=g.arena;if(!a||!validArenaCount(a.remaining)||!Number.isInteger(a.speed)||a.speed<20||a.speed>2000||!Number.isInteger(a.depth)||a.depth<1||a.depth>3||typeof a.pending!=='boolean')throw Error('Invalid arena series');integer(a.rank,'Arena cursor');if(BigInt(a.rank)>=[0n,20n,400n,8902n][a.depth])throw Error('Invalid arena rank');}
   if(g.status==='finished'&&(g.result==='*'||!g.settled||!Number.isFinite(g.finished)||g.endingBalance===null))throw Error('Invalid finished game');
  }
  return data;
 }
 export async function importBackup(input){
+ if(input?.historyChunks!==undefined)throw Error('Backup must contain games, not internal history references');
  const incoming=validateBackup(structuredClone(input));
  return mutate((data,store)=>{
   store.put(structuredClone(data),'recovery');let addedProfiles=0,addedGames=0,conflicts=0;
@@ -141,6 +199,6 @@ export async function importBackup(input){
   return {addedProfiles,addedGames,conflicts};
  });
 }
-export async function restoreRecovery(){const recovery=await read('recovery');if(!recovery)throw Error('No pre-import recovery copy');validateBackup(recovery);return mutate((data,s)=>{s.put(structuredClone(data),'recovery');Object.assign(data,recovery);});}
+export async function restoreRecovery(){const recovery=await read('recovery');if(!recovery)throw Error('No pre-import recovery copy');validateBackup(recovery);return mutate((data,s)=>{s.put(structuredClone(data),'recovery');delete data.historyChunks;Object.assign(data,recovery);});}
 export async function encryptBackup(data,password){if(password.length<8)throw Error('Backup password must have at least 8 characters');const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await derive(password,salt,['encrypt']);const bytes=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));return {encrypted:true,schemaVersion:1,salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(bytes))};}
 export async function decryptBackup(data,password){if(data.schemaVersion!==1||fromBase64(data.salt).length!==16||fromBase64(data.iv).length!==12)throw Error('Invalid encrypted backup');const key=await derive(password,fromBase64(data.salt),['decrypt']);try{return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:fromBase64(data.iv)},key,fromBase64(data.ciphertext))));}catch{throw Error('Wrong password or damaged encrypted backup');}}
