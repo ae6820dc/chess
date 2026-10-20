@@ -48,7 +48,7 @@ export function boardView(target,chess,orientation='w',interactive=false){
  }
  target.replaceChildren();
  for(const r of ranks)for(const f of files){
-  const square=f+r,p=chess.get(square),el=document.createElement('button');el.type='button';el.className='square'+((f.charCodeAt(0)+Number(r))%2?' dark':'');el.dataset.square=square;
+  const square=f+r,p=chess.get(square),el=document.createElement('button');el.type='button';el.className='square'+((f.charCodeAt(0)+Number(r))%2===0?' dark':'');el.dataset.square=square;
   el.setAttribute('aria-label',`${square}${p?' '+(p.color==='w'?'White ':'Black ')+names[p.type]:' empty'}`);
   if(p){const piece=document.createElement('span');piece.className='piece '+(p.color==='w'?'white':'black');piece.textContent=glyphs[p.color][p.type];el.append(piece);}
   const coord=document.createElement('span');coord.className='coord';coord.textContent=square;el.append(coord);
