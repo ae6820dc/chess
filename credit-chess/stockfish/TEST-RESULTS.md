@@ -1,3 +1,30 @@
+# Verification — 2026-10-21: permanent Arena STOP
+
+- `npm test`: **49 passed**.
+- `npm run test:browser`: **107 passed** in the full Chromium regression run.
+- Final focused run after the last storage/UI changes: **15 passed**, including
+  two additional regressions for a failed completion autosave and a browser restart.
+  Command: `npx playwright test tests/browser/arena-stop.spec.js tests/browser/response-delay.spec.js --grep 'STOP|completed scores|legacy chunked|restarting'`.
+- `git diff --check` and JavaScript syntax checks passed.
+
+STOP checks cover active calculation, delayed replies, animation waits, paused
+play, next-opening generation, stale replies, failed writes and retry, interrupted
+results, new series isolation, replay, backup validation, reload and closing/reopening
+Chromium with the same persistent profile. Buttons remain adjacent at 320, 820 and
+1440 pixels, and final results scroll into view. Legacy migration preserves 230
+completed fixture games across archive chunks without duplicating histories or scores.
+Existing capacity tests configure up to 1,000,000 requested games; they do not play
+one million games. Existing real Stockfish, human play, credits, Elo, premoves,
+opening generation, animations, import/export, recovery and offline checks passed.
+
+Implementation uses atomic IndexedDB updates for the terminal game and series
+summary. Completed results increment scores only on the first completion write;
+interrupted games retain result `*` and contribute no points. Series IDs connect
+summaries to the existing paged game archive. Legacy upgrades process one chunk
+at a time, and backups preserve summaries and the existing game records.
+
+---
+
 # Verification — 2026-10-16
 
 ## Issue #6: maximum-size responsive boards
