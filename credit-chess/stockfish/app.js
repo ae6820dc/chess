@@ -119,12 +119,13 @@ function scheduleEngine(){
  const c=chessFor(game);if(game.mode!=='arena'&&c.turn()===game.player)return;
  const required=game.mode==='arena'?2:1;
  if(!engines.length){for(let i=0;i<required;i++){const engine=new StockfishAdapter(message=>{$('engine-status').textContent=message;});engine.ready.catch(()=>{});engines.push(engine);}}
- const engine=engines[game.mode==='arena'?(c.turn()==='w'?0:1):0],token=generation,id=game.id,position=game.moves.join(' '),deadline=game.clock.since+(game.mode==='arena'?0:(prefs.responseDelay??0)*1000);
+ const engine=engines[game.mode==='arena'?(c.turn()==='w'?0:1):0],token=generation,id=game.id,position=game.moves.join(' '),deadline=game.clock.since+(prefs.responseDelay??0)*1000;
  const current=()=>token===generation&&game?.id===id&&game.status==='active'&&!game.clock.paused&&game.moves.join(' ')===position;
  searching=true;$('engine-status').textContent='Stockfish thinking…';const left=remaining(game),time=Math.min(game.mode==='arena'?game.arena.speed:600,Math.max(1,left[c.turn()]-20));
  engine.move({moves:[...game.moves],difficulty:game.difficulty,milliseconds:time,clocks:left,increment:Math.floor(game.clock.increment*1000)}).then(async move=>{
   if(!current())return;
-  // An absolute deadline includes search/loading/save time and survives reload.
+  // Every engine turn uses the previous move timestamp, for either color and mode.
+  // Search/loading/save time counts toward the delay; slow searches add no extra wait.
   const wait=Math.max(0,deadline-Date.now());
   if(wait){
    $('engine-status').textContent='Stockfish response delayed · clock running';

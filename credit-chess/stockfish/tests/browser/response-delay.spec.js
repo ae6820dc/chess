@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 test.use({serviceWorkers:'block'});
 const root='/credit-chess/stockfish/';
+async function freezeClock(page){await page.clock.install();await page.clock.pauseAt(await page.evaluate(()=>Date.now()+100));}
 async function history(page){const b=page.locator('#history-toggle');if(await b.isVisible()&&await b.getAttribute('aria-expanded')!=='true')await b.click();}
 async function setup(page,entry='tablet.html'){
  await page.route('**/engine.js',route=>route.fulfill({contentType:'text/javascript',body:`export class StockfishAdapter {constructor(){this.ready=Promise.resolve({min:1320});} move({moves}){(window.searches??=[]).push(moves);return new Promise(resolve=>window.reply=resolve);}close(){delete window.reply;}}`}));
@@ -13,7 +14,7 @@ async function snapshot(page){return page.evaluate(async()=> (await (await impor
 
 test('delay includes search time, charges clock, and executes only one queued premove',async({page})=>{
  await setup(page);
- await page.clock.install();
+ await freezeClock(page);
  await move(page,'g1','f3');await move(page,'f1','c4');
  const before=await snapshot(page);
  await page.evaluate(()=>window.reply('e7e5'));
@@ -31,7 +32,7 @@ test('delay includes search time, charges clock, and executes only one queued pr
  await expect.poll(async()=> (await snapshot(page)).moves.length).toBe(5);
 });
 for(const action of ['undo','resign','switch','reset'])test('pending reply cancelled on '+action,async({page})=>{
- await setup(page);await page.clock.install();
+ await setup(page);await freezeClock(page);
  await page.evaluate(()=>{window.oldReply=window.reply;window.reply('e7e5');});
  await expect(page.locator('#engine-status')).toContainText('delayed');
  if(action==='undo'||action==='resign')await page.locator('#'+action).click();
@@ -49,9 +50,9 @@ for(const action of ['undo','resign','switch','reset'])test('pending reply cance
  expect((await snapshot(page)).moves).toEqual(action==='undo'?[]:['e2e4']);
 });
 test('timeout during delay terminates without accepting move',async({page})=>{
- await setup(page);
+ await setup(page);await freezeClock(page);
  await page.evaluate(async()=>{const s=await import('./storage.js');await s.mutate(d=>{d.games[0].clock.b=500;d.games[0].clock.since=Date.now();});});
- await page.reload();await page.clock.install();
+ await page.reload();await page.waitForFunction(()=>typeof window.reply==='function');
  await page.evaluate(()=>window.reply('e7e5'));
  await page.clock.runFor(2600);
  await expect.poll(async()=> (await snapshot(page)).status).toBe('finished');
@@ -76,7 +77,7 @@ test('custom preference persists and validates backup limits',async({page})=>{
 for(const delay of [0,1,2,5,10,20,30,60,300])test('response deadline '+delay+' seconds',async({page})=>{
  await setup(page);
  await page.evaluate(async delay=>{const s=await import('./storage.js'),p=(await s.read()).profiles[0];await s.savePrefs(p.id,{...p.prefs,responseDelay:delay});await s.mutate(d=>{d.games[0].clock.since=Date.now();});},delay);
- await page.reload();await page.clock.install();
+ await page.reload();await freezeClock(page);
  const g=await snapshot(page),left=Math.max(0,g.clock.since+delay*1000-await page.evaluate(()=>Date.now()));
  await page.evaluate(()=>window.reply('e7e5'));
  if(left>200){
@@ -86,4 +87,74 @@ for(const delay of [0,1,2,5,10,20,30,60,300])test('response deadline '+delay+' s
   await page.clock.runFor(200);
  }
  await expect.poll(async()=> (await snapshot(page)).moves.length).toBe(2);
+});
+
+async function arenaSetup(page,entry='tablet.html'){
+ await setup(page,entry);
+ await page.evaluate(async()=>{
+  const s=await import('./storage.js');
+  const p=(await s.read()).profiles[0];await s.savePrefs(p.id,{...p.prefs,animationDuration:0});
+  await s.mutate(d=>{const g=d.games[0];g.mode='arena';g.moves=[];g.clock.since=Date.now();g.arena={remaining:1,speed:20};});
+ });
+ await page.reload();await expect(page.locator('#game-status')).toContainText('White to move');
+ await freezeClock(page);
+
+}
+for(const [entry,width,height] of [['tablet.html',412,915],['desktop.html',1440,900],['tablet.html',820,1180]])test(`both arena engines delay every consecutive move: ${entry} ${width}`,async({page})=>{
+ await page.setViewportSize({width,height});
+ await arenaSetup(page,entry);
+ const moves=['e2e4','e7e5','g1f3','b8c6'];
+ for(let i=0;i<moves.length;i++){
+  const g=await snapshot(page);
+  await page.evaluate(m=>window.reply(m),moves[i]);
+  await expect(page.locator('#engine-status')).toContainText('delayed');
+  const left=g.clock.since+2000-await page.evaluate(()=>Date.now());
+  await page.clock.runFor(left-1);
+  expect((await snapshot(page)).moves).toEqual(moves.slice(0,i));
+  await page.clock.runFor(2);
+  await expect.poll(async()=> (await snapshot(page)).moves).toEqual(moves.slice(0,i+1));
+ }
+ // A slow calculation consumes the delay, rather than starting another wait.
+ await page.clock.runFor(2500);
+ await page.evaluate(()=>window.reply('f1c4'));
+ await expect.poll(async()=> (await snapshot(page)).moves.length).toBe(5);
+});
+test('arena pause cancels waiting and calculating replies; resume starts a fresh deadline',async({page})=>{
+ await arenaSetup(page);
+ await page.evaluate(()=>{window.staleReply=window.reply;window.reply('e2e4');});
+ await expect(page.locator('#engine-status')).toContainText('delayed');
+ await page.locator('#arena-pause').click();await expect(page.locator('#game-status')).toHaveText('Arena paused');
+ await page.clock.runFor(3000);expect((await snapshot(page)).moves).toEqual([]);
+ await page.locator('#arena-pause').click();
+ await page.waitForFunction(()=>typeof window.reply==='function');
+ await page.evaluate(()=>{window.staleReply('e2e4');window.reply('e2e4');});
+ await expect(page.locator('#engine-status')).toContainText('delayed');
+ await page.clock.runFor(1900);expect((await snapshot(page)).moves).toEqual([]);
+ await page.clock.runFor(101);await expect.poll(async()=> (await snapshot(page)).moves).toEqual(['e2e4']);
+ // Cancel Black while it is still calculating, then try delivering its stale result.
+ await page.evaluate(()=>{window.staleReply=window.reply;});
+ await page.locator('#arena-pause').click();await expect(page.locator('#game-status')).toHaveText('Arena paused');
+ await page.evaluate(()=>window.staleReply('e7e5'));
+ await page.clock.runFor(3000);expect((await snapshot(page)).moves).toEqual(['e2e4']);
+ await page.locator('#arena-pause').click();await page.waitForFunction(()=>typeof window.reply==='function');await page.evaluate(()=>window.reply('e7e5'));
+ await expect(page.locator('#engine-status')).toContainText('delayed');
+ await page.clock.runFor(1900);expect((await snapshot(page)).moves).toEqual(['e2e4']);
+ await page.clock.runFor(101);await expect.poll(async()=> (await snapshot(page)).moves).toEqual(['e2e4','e7e5']);
+});
+for(const action of ['restart','switch'])test('arena pending move cancelled on '+action,async({page})=>{
+ await arenaSetup(page);
+ await page.evaluate(()=>{window.staleReply=window.reply;window.reply('e2e4');});
+ await expect(page.locator('#engine-status')).toContainText('delayed');
+ if(action==='restart'){
+  page.on('dialog',d=>d.accept());
+  await page.locator('#new-game-form').evaluate(e=>e.requestSubmit());
+  await expect(page.locator('#game-status')).toContainText('White to move');
+  await expect.poll(async()=> (await snapshot(page)).status).toBe('finished');
+ }else{
+  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();
+  await expect(page.locator('#game-status')).toContainText('Choose');
+ }
+ await page.evaluate(()=>window.staleReply('e2e4'));
+ await page.clock.runFor(3000);
+ expect((await snapshot(page)).moves).toEqual([]);
 });
