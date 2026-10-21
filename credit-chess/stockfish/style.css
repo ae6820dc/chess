@@ -201,3 +201,7 @@ aside h2 { font-size:23px; margin-bottom:12px; }
 #premove-panel .actions { gap:3px; flex-wrap:wrap; }
 #premove-list { height:112px; overflow:auto; overflow-anchor:none; }
 .premove-row { height:28px; white-space:nowrap; }
+
+#arena-stop{background:#a32727;border-color:#d45b5b;color:#fff;font-weight:700}#arena-history p{overflow-wrap:anywhere;border-bottom:1px solid var(--border);padding-bottom:.75rem}
+
+.arena-controls{display:inline-flex;gap:.5rem;align-items:stretch;flex-wrap:nowrap}

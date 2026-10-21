@@ -19,7 +19,7 @@ test('fixed IDs, atomic legacy migration, recovery records and shared persistenc
  const ids=await page.evaluate(async()=>{const s=await import('./storage.js');return {program:s.PROGRAM_ID,key:s.STORAGE_KEY};});
  expect(ids.program).toMatch(/^[0-9a-f]{32}$/);expect(ids.key).toMatch(/^[0-9a-f]{16}$/);
  await expect(page.locator('#program-id')).toHaveText('Program ID: '+ids.program);
- expect(await dump(page,ids.key)).toEqual(rows);expect(await dump(page,'stockfish-credit-chess')).toEqual(rows);
+ const upgraded=await dump(page,ids.key);expect(upgraded).toMatchObject(rows);expect(upgraded.snapshot.arenaHistoryVersion).toBe(1);expect(upgraded.snapshot.arenaSeries[0].completed).toBe(0);expect(upgraded.snapshot.games[0].arena.seriesId).toBe(rows.snapshot.games[0].id);expect(await dump(page,'stockfish-credit-chess')).toEqual(rows);
  await page.evaluate(async()=>{await (await import('./storage.js')).mutate(d=>{d.profiles[0].balance='42';});});
  await page.goto(path+'tablet.html');await expect(page.locator('#program-id')).toHaveText('Program ID: '+ids.program);
  expect(await page.evaluate(async()=>(await (await import('./storage.js')).read()).profiles[0].balance)).toBe('42');

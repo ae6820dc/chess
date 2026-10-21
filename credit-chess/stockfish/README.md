@@ -420,3 +420,15 @@ backups include chunked results within the existing 20 MB / 10,000-game import
 bounds; larger histories report an explicit error and remain available for
 individual PGN export through the archive. Disk quotas still apply; a failed
 save stops the engines and retains the existing Retry failed save behavior.
+
+Arena STOP permanently ends the current series, including while paused. It cancels
+engine replies, response delays, animations and opening advancement. The unfinished
+game is retained for review with result `*` and is excluded from the score.
+PAUSE still preserves the current game for resuming.
+
+The Arena page retains per-series scores and match settings in IndexedDB. “Review
+games” opens that series in the existing paged archive, with replay and PGN export.
+New series do not replace earlier scores. Full backups include series summaries;
+legacy saves are upgraded in bounded history chunks without duplicating game data.
+Results persist across reloads and browser restarts using the existing local storage
+system; clearing browser data removes local saves, so keep exported backups.

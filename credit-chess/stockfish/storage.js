@@ -102,11 +102,11 @@ const compareOrder=(a,b)=>a[0]-b[0]||a[1].localeCompare(b[1],'en');
 // Select a bounded page by (creation time, ID), including imported older games.
 // Manifest bounds skip chunks older than the page; only one chunk is read at
 // a time. Neither archive navigation nor normal autosaves load the full history.
-export async function archivePage(profileId,cursor=null,limit=50){
+export async function archivePage(profileId,cursor=null,limit=50,seriesId=null){
  if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw Error('Invalid archive page size');
  const data=await read();let games=[];
  const add=rows=>{
-  games.push(...rows.filter(g=>g.profileId===profileId&&(!cursor||compareOrder(gameOrder(g),cursor)<0)));
+  games.push(...rows.filter(g=>g.profileId===profileId&&(!seriesId||g.arena?.seriesId===seriesId)&&(!cursor||compareOrder(gameOrder(g),cursor)<0)));
   games.sort((a,b)=>compareOrder(gameOrder(b),gameOrder(a)));games=games.slice(0,limit+1);
  };
  add(data.games);
@@ -132,6 +132,45 @@ export async function readBackup(){
  }
  return data;
 }
+export function recordArena(data,g,existing){
+ if(g.mode!=='arena')return;
+ const id=g.arena.seriesId||(g.arena.seriesId=g.id);
+ const series=(data.arenaSeries??=[]).find(s=>s.id===id);
+ const row=series||{id,profileId:g.profileId,created:g.created,status:'running',completed:0,white:0,black:0,draws:0,whitePoints:0,blackPoints:0,config:{difficulty:g.difficulty,base:g.clock.base,increment:g.clock.increment,...g.arena}};
+ if(!series)data.arenaSeries.push(row);
+ if(g.status==='finished'&&g.result!=='*'&&existing?.status!=='finished'){
+  row.completed++;if(g.result==='1-0')row.white++;else if(g.result==='0-1')row.black++;else row.draws++;
+  row.whitePoints=row.white+row.draws/2;row.blackPoints=row.black+row.draws/2;
+ }
+ if(g.status==='active'||g.arena.pending){row.status='running';delete row.finished;}
+ if(g.arena.stopped||g.status==='finished'&&!g.arena.pending){row.status=g.arena.stopped?'stopped':'completed';row.finished=g.updated;}
+}
+// Upgrade legacy series once, including chunked games, without copying histories.
+export async function ensureArenaHistory(){
+ const data=await read();if(data.arenaHistoryVersion===1)return;
+ const summary={arenaSeries:[]},last=new Map();
+ const upgrade=rows=>{
+  rows.sort((a,b)=>compareOrder(gameOrder(a),gameOrder(b)));
+  for(const g of rows){if(g.mode!=='arena')continue;const prev=last.get(g.profileId);
+   g.arena.seriesId??=prev&&prev.remaining===g.arena.remaining+1&&BigInt(prev.rank)+1n===BigInt(g.arena.rank)?prev.seriesId:g.id;
+   last.set(g.profileId,{...g.arena});recordArena(summary,g,null);
+  }
+ };
+ // Read and rewrite only one immutable history chunk at a time. A failed
+ // upgrade can safely run again: summaries are rebuilt rather than incremented.
+ for(const c of (data.historyChunks||[]).slice().sort((a,b)=>compareOrder(a.oldest,b.oldest))){
+  const rows=await historyChunk(c.key);upgrade(rows);const db=await openStorage();
+  await new Promise((resolve,reject)=>{const t=db.transaction('data','readwrite');t.objectStore('data').put(rows,c.key);t.oncomplete=resolve;t.onerror=t.onabort=()=>reject(t.error);});
+ }
+ await mutate(d=>{upgrade(d.games);d.arenaSeries=summary.arenaSeries;d.arenaHistoryVersion=1;});
+}
+
+export async function stopArena(game){
+ const snapshot=structuredClone(game);snapshot.arena.stopped=true;snapshot.arena.pending=false;
+ if(snapshot.status==='active'){snapshot.status='finished';snapshot.result='*';snapshot.reason='Arena stopped · unfinished game';snapshot.finished=Date.now();snapshot.updated=snapshot.finished;snapshot.clock.paused=true;snapshot.settled=true;snapshot.endingBalance=snapshot.startingBalance;snapshot.revision++;}
+ snapshot.pgn=pgn(snapshot);
+ return mutate(data=>{const i=data.games.findIndex(g=>g.id===snapshot.id);if(i<0)throw Error('Arena game missing');const profile=data.profiles.find(p=>p.id===snapshot.profileId);if(!profile)throw Error('Profile missing');snapshot.settled=true;snapshot.endingBalance=profile.balance;const existing=data.games[i];data.games[i]=snapshot;recordArena(data,snapshot,existing);return snapshot;});
+}
 export async function saveGame(game) {
  const snapshot=structuredClone(game);snapshot.pgn=pgn(snapshot);
  return mutate(data=>{
@@ -139,7 +178,7 @@ export async function saveGame(game) {
   const i=data.games.findIndex(g=>g.id===snapshot.id),existing=data.games[i];
   if(existing && (existing.settled || existing.revision>snapshot.revision)) return existing;
   if(snapshot.status==='finished'&&!snapshot.settled){profile.balance=(BigInt(profile.balance)+payout(snapshot)).toString();snapshot.settled=true;snapshot.endingBalance=profile.balance;}
-  if(i<0)data.games.push(snapshot);else data.games[i]=snapshot;return snapshot;
+  recordArena(data,snapshot,existing);if(i<0)data.games.push(snapshot);else data.games[i]=snapshot;return snapshot;
  });
 }
 export async function savePrefs(id,prefs){return mutate(data=>{const p=data.profiles.find(p=>p.id===id);if(!p)throw Error('Profile missing');p.prefs=structuredClone(prefs);});}
@@ -165,6 +204,7 @@ export async function selectProfile(id){return mutate(data=>{const p=data.profil
 export function validateBackup(data){
  if(data?.historyChunks!==undefined&&(!Array.isArray(data.historyChunks)||data.historyChunks.some(c=>!c||typeof c.key!=='string'||!/^history:[0-9a-f-]{36}$/.test(c.key)||!Array.isArray(c.oldest)||!Number.isFinite(c.oldest[0])||typeof c.oldest[1]!=='string'||!Array.isArray(c.newest)||!Number.isFinite(c.newest[0])||typeof c.newest[1]!=='string'||!Array.isArray(c.profiles)||c.profiles.some(id=>typeof id!=='string'))))throw Error('Invalid history manifest');
  if(!data||data.schemaVersion!==SCHEMA||!Array.isArray(data.profiles)||!Array.isArray(data.games)||data.profiles.length>1000||data.games.length>10000)throw Error('Unsupported or invalid backup schema');
+ if(data.arenaSeries!==undefined&&(!Array.isArray(data.arenaSeries)||data.arenaSeries.some(s=>!s||typeof s.id!=='string'||!data.profiles.some(p=>p.id===s.profileId)||!['running','completed','stopped'].includes(s.status)||!Number.isFinite(s.created)||!s.config||['completed','white','black','draws'].some(k=>!Number.isSafeInteger(s[k])||s[k]<0)||s.completed!==s.white+s.black+s.draws||s.whitePoints!==s.white+s.draws/2||s.blackPoints!==s.black+s.draws/2)))throw Error('Invalid arena history');
  const names=new Set(),ids=new Set(),gids=new Set(),activeProfiles=new Set();
  for(const p of data.profiles){
   if(typeof p.id!=='string'||ids.has(p.id)||typeof p.name!=='string'||p.name.length>60||!p.name.trim())throw Error('Invalid profile');ids.add(p.id);
@@ -183,8 +223,8 @@ export function validateBackup(data){
   if(!g.clock||typeof g.clock.paused!=='boolean'||!Number.isFinite(g.clock.base)||g.clock.base<1||g.clock.base>86400||!Number.isFinite(g.clock.increment)||g.clock.increment<0||g.clock.increment>3600||['w','b','since'].some(k=>!Number.isFinite(g.clock[k])||g.clock[k]<0)||!Number.isInteger(g.revision)||g.revision<0||![g.created,g.updated].every(Number.isFinite)||typeof g.settled!=='boolean')throw Error('Invalid clock or timestamps');
   if(g.status==='active'&&(g.result!=='*'||g.settled||g.finished!==null||activeProfiles.has(g.profileId)))throw Error('Invalid or duplicate active game');
   if(g.status==='active')activeProfiles.add(g.profileId);
-  if(g.mode==='arena'){const a=g.arena;if(!a||!validArenaCount(a.remaining)||!Number.isInteger(a.speed)||a.speed<20||a.speed>2000||!Number.isInteger(a.depth)||a.depth<1||a.depth>3||typeof a.pending!=='boolean')throw Error('Invalid arena series');integer(a.rank,'Arena cursor');if(BigInt(a.rank)>=[0n,20n,400n,8902n][a.depth])throw Error('Invalid arena rank');}
-  if(g.status==='finished'&&(g.result==='*'||!g.settled||!Number.isFinite(g.finished)||g.endingBalance===null))throw Error('Invalid finished game');
+  if(g.mode==='arena'){const a=g.arena;if(a?.stopped!==undefined&&typeof a.stopped!=='boolean'||a?.seriesId!==undefined&&typeof a.seriesId!=='string')throw Error('Invalid arena identity');if(!a||!validArenaCount(a.remaining)||!Number.isInteger(a.speed)||a.speed<20||a.speed>2000||!Number.isInteger(a.depth)||a.depth<1||a.depth>3||typeof a.pending!=='boolean')throw Error('Invalid arena series');integer(a.rank,'Arena cursor');if(BigInt(a.rank)>=[0n,20n,400n,8902n][a.depth])throw Error('Invalid arena rank');}
+  if(g.status==='finished'&&((g.result==='*'&&!g.arena?.stopped)||!g.settled||!Number.isFinite(g.finished)||g.endingBalance===null))throw Error('Invalid finished game');
  }
  return data;
 }
@@ -196,9 +236,11 @@ export async function importBackup(input){
   const accepted=new Set();
   for(const p of incoming.profiles){if(data.profiles.some(x=>x.id===p.id||(isGenerated(p)&&x.name===p.name))){conflicts++;continue;}if(data.profiles.some(x=>x.name===p.name))p.name=p.name.slice(0,40)+' (imported '+p.id.slice(0,6)+')';data.profiles.push(structuredClone(p));accepted.add(p.id);addedProfiles++;}
   for(const g of incoming.games){if(!accepted.has(g.profileId)||data.games.some(x=>x.id===g.id)){conflicts++;continue;}data.games.push(structuredClone(g));addedGames++;}
+  if(addedGames)delete data.arenaHistoryVersion;
+  for(const row of incoming.arenaSeries||[])if(accepted.has(row.profileId)&&!(data.arenaSeries||[]).some(s=>s.id===row.id))(data.arenaSeries??=[]).push(structuredClone(row));
   return {addedProfiles,addedGames,conflicts};
  });
 }
-export async function restoreRecovery(){const recovery=await read('recovery');if(!recovery)throw Error('No pre-import recovery copy');validateBackup(recovery);return mutate((data,s)=>{s.put(structuredClone(data),'recovery');delete data.historyChunks;Object.assign(data,recovery);});}
+export async function restoreRecovery(){const recovery=await read('recovery');if(!recovery)throw Error('No pre-import recovery copy');validateBackup(recovery);return mutate((data,s)=>{s.put(structuredClone(data),'recovery');delete data.historyChunks;delete data.arenaSeries;delete data.arenaHistoryVersion;Object.assign(data,recovery);});}
 export async function encryptBackup(data,password){if(password.length<8)throw Error('Backup password must have at least 8 characters');const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await derive(password,salt,['encrypt']);const bytes=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));return {encrypted:true,schemaVersion:1,salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(bytes))};}
 export async function decryptBackup(data,password){if(data.schemaVersion!==1||fromBase64(data.salt).length!==16||fromBase64(data.iv).length!==12)throw Error('Invalid encrypted backup');const key=await derive(password,fromBase64(data.salt),['decrypt']);try{return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:fromBase64(data.iv)},key,fromBase64(data.ciphertext))));}catch{throw Error('Wrong password or damaged encrypted backup');}}

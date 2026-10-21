@@ -158,3 +158,16 @@ for(const action of ['restart','switch'])test('arena pending move cancelled on '
  await page.clock.runFor(3000);
  expect((await snapshot(page)).moves).toEqual([]);
 });
+
+for(const phase of ['calculation','delay','animation','paused'])test('STOP rejects stale Arena replies during '+phase,async({page})=>{
+ await arenaSetup(page);await page.evaluate(()=>{window.staleReply=window.reply;});
+ if(phase==='delay'){await page.evaluate(()=>window.reply('e2e4'));await expect(page.locator('#engine-status')).toContainText('delayed');}
+ if(phase==='animation'){
+  await page.evaluate(()=>{document.querySelector('#board').animate([{opacity:1},{opacity:.9}],{duration:10000});window.reply('e2e4');});await page.clock.runFor(2100);
+ }
+ if(phase==='paused')await page.locator('#arena-pause').click();
+ await page.locator('#arena-stop').click();await expect(page.locator('#notice')).toContainText('Arena stopped');
+ await page.evaluate(()=>window.staleReply('e2e4'));await page.clock.runFor(12000);
+ const g=await snapshot(page);expect(g.moves).toEqual([]);expect(g.result).toBe('*');expect(g.arena.stopped).toBe(true);
+ await page.reload();await expect(page.locator('#arena-pause')).toBeHidden();await expect(page.locator('#arena-stop')).toBeHidden();
+});
