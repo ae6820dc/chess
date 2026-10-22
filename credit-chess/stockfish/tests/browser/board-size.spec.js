@@ -8,7 +8,7 @@ for(const entry of ['desktop.html','tablet.html']) {
     await page.locator('[data-tab=settings]').click();
     await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');
     await page.locator('#pin-form button[value=generate]').click();
-    await expect(page.locator('#balance')).toHaveText('100000');
+    await expect(page.locator('#balance')).toHaveText('100.000');
     await page.locator('[data-tab=play]').click();
     const toggle=page.locator('#match-toggle');
     if(await toggle.isVisible()&&await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();

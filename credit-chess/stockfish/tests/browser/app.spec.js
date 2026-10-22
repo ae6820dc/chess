@@ -1,6 +1,7 @@
+import {formatCredits} from '../../credits.js';
 import {test,expect} from '@playwright/test';
 const path='/credit-chess/stockfish/';
-async function create(page){await page.goto(path+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#balance')).toHaveText('100000');}
+async function create(page){await page.goto(path+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');await page.locator('[data-tab=play]').click();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#balance')).toHaveText('100.000');}
 async function clock(page,seconds=30){await page.locator('#base').fill(String(seconds/60));await page.locator('#base').dispatchEvent('change');await page.locator('#increment').fill('0');await page.locator('#increment').dispatchEvent('change');}
 async function snapshot(page){return page.evaluate(async()=>await (await import('./storage.js')).read());}
 test('mobile real engine gameplay, illegal move rejection, clock, persisted preferences and active game',async({page})=>{
@@ -16,8 +17,8 @@ test('mobile real engine gameplay, illegal move rejection, clock, persisted pref
 });
 test('resignation debits a BigInt-safe stake exactly once and archive replays',async({page})=>{
  await create(page);await page.locator('#stake').fill('999999999999999999999999999999');await page.locator('#stake').dispatchEvent('change');await page.locator('#new-game-form button[type=submit]').click();await page.locator('#resign').click();await expect(page.locator('#game-status')).toContainText('Player resigned');
- const balance=(100000n-999999999999999999999999999999n).toString();await expect(page.locator('#balance')).toHaveText(balance);
- const data=await snapshot(page);expect(data.games[0].settled).toBe(true);await page.evaluate(async g=>{const {saveGame}=await import('./storage.js');await saveGame({...g,settled:false});},data.games[0]);await page.reload();await expect(page.locator('#balance')).toHaveText(balance);await expect(page.locator('#stake')).toHaveValue(data.games[0].stake);
+ const balance=(100000n-999999999999999999999999999999n).toString();await expect(page.locator('#balance')).toHaveText(formatCredits(balance));
+ const data=await snapshot(page);expect(data.games[0].settled).toBe(true);await page.evaluate(async g=>{const {saveGame}=await import('./storage.js');await saveGame({...g,settled:false});},data.games[0]);await page.reload();await expect(page.locator('#balance')).toHaveText(formatCredits(balance));await expect(page.locator('#stake')).toHaveValue(formatCredits(data.games[0].stake));
  await page.locator('[data-tab=archive]').click();await page.getByRole('button',{name:'Replay',exact:true}).click();await expect(page.locator('#replay-status')).toContainText('Ply 0/0');
 });
 test('creation PIN, schema validation, encrypted backup round-trip and recovery',async({page})=>{
@@ -32,11 +33,11 @@ test('creation PIN, schema validation, encrypted backup round-trip and recovery'
  });expect(outcome).toEqual({wrong:true,invalid:true,equal:true,conflict:{addedProfiles:0,addedGames:0,conflicts:1},count:2});
 });
 test('clock timeout on idle player persists once after reload',async({page})=>{
- await create(page);await clock(page,2);await page.locator('#new-game-form button[type=submit]').click();await expect(page.locator('#game-status')).toContainText('Time expired',{timeout:10000});await expect(page.locator('#balance')).toHaveText('99900');await page.reload();await expect(page.locator('#balance')).toHaveText('99900');expect((await snapshot(page)).games[0].result).toBe('0-1');
+ await create(page);await clock(page,2);await page.locator('#new-game-form button[type=submit]').click();await expect(page.locator('#game-status')).toContainText('Time expired',{timeout:10000});await expect(page.locator('#balance')).toHaveText('99.900');await page.reload();await expect(page.locator('#balance')).toHaveText('99.900');expect((await snapshot(page)).games[0].result).toBe('0-1');
 });
 test('analysis undo never credits and offline reload restores saved data',async({page,context})=>{
- await create(page);await page.locator('#mode').selectOption('analysis');await page.locator('#new-game-form button[type=submit]').click();await page.locator('[data-square=e2]').click();await page.locator('[data-square=e4]').click();await expect(page.locator('#moves li')).toHaveCount(2);await page.locator('#undo').click();await expect(page.locator('#moves li')).toHaveCount(0);await expect(page.locator('#balance')).toHaveText('100000');
- await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await page.waitForFunction(()=>navigator.serviceWorker.controller!==null);await context.setOffline(true);await page.reload();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#moves li')).toHaveCount(0);await expect(page.locator('#balance')).toHaveText('100000');await context.setOffline(false);
+ await create(page);await page.locator('#mode').selectOption('analysis');await page.locator('#new-game-form button[type=submit]').click();await page.locator('[data-square=e2]').click();await page.locator('[data-square=e4]').click();await expect(page.locator('#moves li')).toHaveCount(2);await page.locator('#undo').click();await expect(page.locator('#moves li')).toHaveCount(0);await expect(page.locator('#balance')).toHaveText('100.000');
+ await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await page.waitForFunction(()=>navigator.serviceWorker.controller!==null);await context.setOffline(true);await page.reload();await expect(page.locator('#club')).toBeVisible();await expect(page.locator('#moves li')).toHaveCount(0);await expect(page.locator('#balance')).toHaveText('100.000');await context.setOffline(false);
 });
 test('exact opening worker cursor persists, arena starts from it with independent engines and pauses',async({page})=>{
  await create(page);await page.locator('[data-tab=openings]').click();await page.locator('#opening-depth').selectOption('3');await page.locator('#opening-rank').fill('8901');await page.locator('#opening-jump').click();await expect(page.locator('#opening-status')).toContainText('8902',{timeout:25000});
@@ -54,7 +55,7 @@ test('arena completes a series, archives both games and progresses without rewar
  await page.locator('[data-tab=arena]').click();await page.locator('#arena-count').fill('2');await page.locator('#arena-speed').fill('2000');await page.locator('#arena-form button').click();
  await expect.poll(async()=>{const d=await snapshot(page);return d.games.filter(g=>g.status==='finished').length;},{timeout:45000}).toBe(2);
  const data=await snapshot(page);expect(data.games).toHaveLength(2);expect(data.games.map(g=>g.arena.rank)).toEqual(['0','1']);expect(data.games.every(g=>g.settled)).toBe(true);expect(data.games.every(g=>g.arena.pending===false)).toBe(true);expect(data.profiles[0].balance).toBe('100000');
- await page.reload();await expect(page.locator('#balance')).toHaveText('100000');expect((await snapshot(page)).games).toHaveLength(2);
+ await page.reload();await expect(page.locator('#balance')).toHaveText('100.000');expect((await snapshot(page)).games).toHaveLength(2);
 });
 test('promotion dialog completes an actual legal underpromotion before real engine reply',async({page})=>{
  await create(page);

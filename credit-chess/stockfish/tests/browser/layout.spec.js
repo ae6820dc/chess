@@ -10,7 +10,7 @@ const viewports = [
 const path = '/credit-chess/stockfish/';
 async function create(page) {
   await page.goto(path+'desktop.html');
-  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();
+  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');await page.locator('[data-tab=play]').click();
   await expect(page.locator('#club')).toBeVisible();
 }
 async function start(page) {

@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 const root='/credit-chess/stockfish/';
 async function create(page,entry){
- await page.goto(root+entry);await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');
+ await page.goto(root+entry);await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');
 }
 for(const [entry,width] of [['desktop.html',1440],['tablet.html',820],['desktop.html',412]])for(const count of [8902,100000,1000000])test(`${entry} at ${width}px configures ${count} sequential games without preallocation`,async({page})=>{
  await page.setViewportSize({width,height:1000});await create(page,entry);

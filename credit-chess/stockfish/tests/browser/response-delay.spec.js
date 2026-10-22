@@ -5,7 +5,7 @@ async function freezeClock(page){await page.clock.install();await page.clock.pau
 async function history(page){const b=page.locator('#history-toggle');if(await b.isVisible()&&await b.getAttribute('aria-expanded')!=='true')await b.click();}
 async function setup(page,entry='tablet.html'){
  await page.route('**/engine.js',route=>route.fulfill({contentType:'text/javascript',body:`export class StockfishAdapter {constructor(){this.ready=Promise.resolve({min:1320});} move({moves}){(window.searches??=[]).push(moves);return new Promise(resolve=>window.reply=resolve);}close(){delete window.reply;}}`}));
- await page.goto(root+entry);await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');
+ await page.goto(root+entry);await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');
  await page.evaluate(async()=>{const s=await import('./storage.js'),c=await import('./core.js'),p=(await s.read()).profiles[0];await s.savePrefs(p.id,{...p.prefs,responseDelay:2});const g=c.newGame(p,{...p.prefs},'analysis',['e2e4']);g.openingPlies=0;await s.saveGame(g);});
  await page.reload();await expect(page.locator('#game-status')).toContainText('Black to move');await history(page);await page.locator('#premove-panel').evaluate(e=>e.open=true);
 }

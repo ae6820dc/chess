@@ -19,7 +19,7 @@ test('chooser preserves saved state between layouts and all entrypoints work off
  const before=await page.evaluate(async()=>await(await import('./storage.js')).read());
  await page.locator('.brand').click();await page.evaluate(()=>navigator.serviceWorker.ready);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
  await context.setOffline(true);await page.reload();
- await page.getByRole('link',{name:/Open Tablet/}).click();await expect(page.locator('#balance')).toHaveText('99900');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');
+ await page.getByRole('link',{name:/Open Tablet/}).click();await expect(page.locator('#balance')).toHaveText('99.900');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');
  expect(await page.evaluate(async()=>await(await import('./storage.js')).read())).toEqual(before);
  await page.locator('.brand').click();await page.getByRole('link',{name:/Open Desktop/}).click();await expect(page.locator('#game-status')).toContainText('Player resigned');
  expect(await page.evaluate(async()=>await(await import('./storage.js')).read())).toEqual(before);

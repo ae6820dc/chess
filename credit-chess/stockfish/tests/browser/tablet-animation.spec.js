@@ -3,7 +3,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 const root='/credit-chess/stockfish/';
 async function create(page,entry='tablet.html') {
   await page.goto(root+entry);
-  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();
+  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');await page.locator('[data-tab=play]').click();
   await expect(page.locator('#club')).toBeVisible();
 }
 async function start(page) {
@@ -101,8 +101,9 @@ test('tablet orientation and adjustable durations preserve aligned positions and
 test('preferences, profile, balance, active game and archive survive entry switching and refresh',async({page})=>{
   await create(page);await start(page);
   await page.locator('[data-tab=settings]').click();await page.locator('#animation-duration').selectOption('1000');await page.locator('#theme').selectOption('midnight');
+  await expect.poll(()=>page.evaluate(async()=>{const p=(await (await import('./storage.js')).read()).profiles[0];return [p.prefs.animationDuration,p.prefs.theme];})).toEqual([1000,'midnight']);
   await page.goto(root+'desktop.html');await expect(page.locator('#club')).toBeVisible();
-  await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('1000');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');await expect(page.locator('#balance')).toHaveText('100000');
+  await page.locator('[data-tab=settings]').click();await expect(page.locator('#animation-duration')).toHaveValue('1000');await expect(page.locator('body')).toHaveAttribute('data-theme','midnight');await expect(page.locator('#balance')).toHaveText('100.000');
   await page.goto(root+'tablet.html');await expect(page.locator('#game-status')).toContainText('White to move');
   await page.locator('[data-tab=archive]').click();await expect(page.locator('.archive-item')).toHaveCount(1);
   await page.locator('[data-tab=settings]').click();await page.locator('#animation-duration').selectOption('0');

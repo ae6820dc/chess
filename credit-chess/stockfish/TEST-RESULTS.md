@@ -202,3 +202,29 @@ queried from this environment: the GitHub Pages API request returned Forbidden.
 - Full backups retain the existing 20 MB / 10,000-game resource bounds. Larger
   histories stay on disk and are accessible through paged results and PGN export.
 - Browser coverage uses Chromium viewport emulation, not physical devices.
+
+## Credit grouping — 2026-10-22
+
+- Shared presentation formatter inserts dots every three digits without converting
+  exact integer strings to Number. Header, finished Play result, Archive stakes
+  and ending balances use it; the shared header covers Arena and other tabs.
+- Stake inputs display grouped values when unfocused and plain digits while
+  editing. Validation accepts grouped integers and persistence keeps raw decimal
+  strings. No storage schema, accounting, profile or game migration changed.
+- The existing scrollable header balance, wrapping result/archive and bounded
+  input styles accommodate long numbers. The service worker cache includes the
+  formatter for offline reloads.
+- `npm test`: **50 passed**, zero failures.
+- Final `npm run test:browser`: **112 passed, 1 failed** (113 total, 3.5 min).
+  The existing `drag uses existing castling rules` test failed intermittently;
+  its isolated rerun passed (1/1). This is not a fully green single suite run.
+- All four new browser tests passed: desktop 1440, tablet 820 and mobile 412;
+  zero, positive, negative, million, billion and 200-digit balances; reload,
+  screen bounds, Play result, Arena header, Archive stake/balance and unchanged
+  stored profiles/games. Existing offline, settlement, migration and backup
+  checks passed in the final full run.
+- Earlier runs exposed test timing races. Premoves undo now waits for durable
+  storage before reload; mouse drag sets viewport before loading the board;
+  preference navigation waits for the queued preference writes. These test-only
+  synchronization changes passed in the final full run.
+- `git diff --check`: passed.

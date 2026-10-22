@@ -3,7 +3,7 @@ const root='/credit-chess/stockfish/';
 for(const [entry,width,height,type] of [['desktop.html',1366,768,'mouse'],['tablet.html',412,915,'touch'],['tablet.html',768,1024,'pen']]){
  test(`${entry} ${width} ${type}: continuous unrestricted drag, rollback and legal move`,async({page})=>{
   await page.setViewportSize({width,height});await page.goto(root+entry);
-  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');await page.locator('[data-tab=play]').click();
+  await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');await page.locator('[data-tab=play]').click();
   const toggle=page.locator('#match-toggle');if(await toggle.isVisible())await toggle.click();
   await page.locator('#mode').selectOption('analysis');await page.locator('#new-game-form button').click();await expect(page.locator('#game-status')).toContainText('White to move');
   const source=page.locator('#board [data-square=e2]'),r=await source.boundingBox(),x=r.x+r.width/2,y=r.y+r.height/2;
@@ -36,12 +36,12 @@ for(const [name,line,from,to,promotion] of [
  ['en passant',['e2e4','a7a6','e4e5','d7d5'],'e5','d6'],
  ['promotion',['a2a4','h7h5','a4a5','h5h4','a5a6','h4h3','a6b7','h3g2'],'b7','a8','n']
 ])test(`drag uses existing ${name} rules`,async({page})=>{
- await page.goto(root+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');
+ await page.goto(root+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');
  await page.evaluate(async line=>{const s=await import('./storage.js'),c=await import('./core.js'),p=(await s.read()).profiles[0];await s.saveGame(c.newGame(p,p.prefs,'analysis',line));},line);
  await page.reload();await expect(page.locator('#game-status')).toContainText('White to move');
  const a=await page.locator(`#board [data-square=${from}]`).boundingBox(),b=await page.locator(`#board [data-square=${to}]`).boundingBox();
  await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:5});await page.mouse.up();
  if(promotion){await expect(page.locator('#promotion')).toBeVisible();await page.locator(`[data-promotion=${promotion}]`).click();}
  await expect.poll(()=>page.evaluate(async ply=> (await (await import('./storage.js')).read()).games[0].moves[ply],line.length)).toBe(from+to+(promotion||''));
- await expect(page.locator('.drag-piece')).toHaveCount(0);await expect(page.locator('#balance')).toHaveText('100000');
+ await expect(page.locator('.drag-piece')).toHaveCount(0);await expect(page.locator('#balance')).toHaveText('100.000');
 });

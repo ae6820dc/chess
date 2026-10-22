@@ -5,7 +5,7 @@ import {join} from 'node:path';
 test.use({serviceWorkers:'block'});
 const path='/credit-chess/stockfish/';
 async function setup(page){
- await page.goto(path+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100000');
+ await page.goto(path+'desktop.html');await page.locator('[data-tab=settings]').click();await page.locator('#generate-user').click();await page.locator('#pin').fill('1111');await page.locator('#pin-form button[value=generate]').click();await expect(page.locator('#balance')).toHaveText('100.000');
  await page.evaluate(async()=>{const s=await import('./storage.js'),c=await import('./core.js'),d=await s.read(),p=d.profiles[0];p.prefs.responseDelay=10;await s.savePrefs(p.id,p.prefs);const g=c.newGame(p,p.prefs,'arena',[]);g.arena={remaining:1000000,speed:2000,depth:1,rank:'0',pending:false};await s.saveGame(g);});await page.reload();await expect(page.locator('#arena-stop')).toBeVisible();
 }
 for(const paused of [false,true])test('STOP permanently ends '+(paused?'paused':'calculating/delayed')+' arena',async({page})=>{
@@ -47,7 +47,7 @@ test('legacy chunked Arena history upgrades without losing games or scores',asyn
   const s=await import('./storage.js'),c=await import('./core.js'),p=(await s.read()).profiles[0];
   await s.mutate(d=>{d.games=[];delete d.arenaSeries;delete d.arenaHistoryVersion;for(let i=0;i<230;i++){const g=c.newGame(p,p.prefs,'arena',[],Date.now()+i);g.arena={remaining:300-i,speed:20,depth:2,rank:String(i),pending:false};c.finish(g,i%2?'0-1':'1-0','Legacy result');g.settled=true;g.endingBalance=p.balance;d.games.push(g);}});
  });
- await page.reload();await expect(page.locator('#balance')).toHaveText('100000');
+ await page.reload();await expect(page.locator('#balance')).toHaveText('100.000');
  const result=await page.evaluate(async()=>{const s=await import('./storage.js'),d=await s.readBackup();s.validateBackup(d);return {games:d.games.length,series:d.arenaSeries,ids:new Set(d.games.map(g=>g.arena.seriesId)).size};});
  expect(result.games).toBe(230);expect(result.ids).toBe(1);expect(result.series).toHaveLength(1);expect(result.series[0].completed).toBe(230);expect(result.series[0].whitePoints).toBe(115);
  await page.reload();const rows=await page.evaluate(async()=>(await (await import('./storage.js')).read()).arenaSeries);expect(rows[0].completed).toBe(230);
@@ -81,7 +81,7 @@ test('stopped scores survive closing and restarting the browser',async()=>{
  try{
   context=await launch();let page=context.pages()[0]||await context.newPage();await setup(page);await page.locator('#arena-stop').click();await expect(page.locator('#notice')).toContainText('Arena stopped');
   const saved=await page.evaluate(async()=>(await (await import('./storage.js')).read()).arenaSeries);
-  await page.goto('about:blank');await context.close();context=await launch();page=context.pages()[0]||await context.newPage();await page.goto(path+'desktop.html');await expect(page.locator('#balance')).toHaveText('100000');await expect(page.locator('#arena-stop')).toBeHidden();await expect(page.locator('#arena-pause')).toBeHidden();
+  await page.goto('about:blank');await context.close();context=await launch();page=context.pages()[0]||await context.newPage();await page.goto(path+'desktop.html');await expect(page.locator('#balance')).toHaveText('100.000');await expect(page.locator('#arena-stop')).toBeHidden();await expect(page.locator('#arena-pause')).toBeHidden();
   expect(await page.evaluate(async()=>(await (await import('./storage.js')).read()).arenaSeries)).toEqual(saved);
  }finally{await context?.close();await rm(directory,{recursive:true,force:true});}
 });
