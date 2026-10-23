@@ -25,18 +25,24 @@ def launch(cdp,identity,start):
   if info['url']==start:
    # Keep installation, close the test launch window (Chess intentionally
    # permits only one writer tab for clock/credit integrity).
-   found=False
-   for candidate in context.pages:
-    session=context.new_cdp_session(candidate)
-    target=session.send('Target.getTargetInfo')['targetInfo']['targetId']
-    session.detach()
-    if target==result['targetId']:
-     expect(candidate.locator('body')).to_be_visible()
-     mode=candidate.evaluate("({fullscreen:matchMedia('(display-mode: fullscreen)').matches,standalone:matchMedia('(display-mode: standalone)').matches})")
-     assert mode['fullscreen'] or mode['standalone'],mode
-     results.setdefault('launch_modes',{})[identity]=mode
-     found=True;break
-   assert found,'App launch target not visible to browser automation'
+   # Native app windows are CDP targets outside Playwright's page list.
+   session=cdp.send('Target.attachToTarget',{'targetId':result['targetId'],'flatten':False})['sessionId']
+   messages=[]
+   def receive(event):
+    if event.get('sessionId')==session:
+     message=json.loads(event['message'])
+     if message.get('id')==1:messages.append(message)
+   cdp.on('Target.receivedMessageFromTarget',receive)
+   expression="""new Promise(resolve=>{function check(){if(document.body&&document.readyState==='complete')resolve({body:document.body.innerText.length,fullscreen:matchMedia('(display-mode: fullscreen)').matches,standalone:matchMedia('(display-mode: standalone)').matches});else setTimeout(check,50)}check()})"""
+   cdp.send('Target.sendMessageToTarget',{'sessionId':session,'message':json.dumps({'id':1,'method':'Runtime.evaluate','params':{'expression':expression,'awaitPromise':True,'returnByValue':True}})})
+   while not messages and time.monotonic()<deadline:
+    cdp.send('Target.getTargetInfo',{'targetId':result['targetId']});time.sleep(.05)
+   cdp.remove_listener('Target.receivedMessageFromTarget',receive)
+   cdp.send('Target.detachFromTarget',{'sessionId':session})
+   assert messages,messages
+   mode=messages[0]['result']['result']['value']
+   assert mode['body']>0 and (mode['fullscreen'] or mode['standalone']),mode
+   results.setdefault('launch_modes',{})[identity]=mode
    cdp.send('Target.closeTarget',{'targetId':result['targetId']})
    return result['targetId']
   time.sleep(.1)
