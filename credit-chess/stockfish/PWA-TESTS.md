@@ -27,8 +27,8 @@ A GitHub Pages közös originje önmagában nem jelent azonos PWA-identitást.
 
 Csak SVG ikonok szerepeltek. Az új 192/512 PNG és külön maskable bejegyzések
 kiküszöbölik az Android/WebAPK ikontámogatási bizonytalanságát. Minden fő
-változat feliratozott saját ikont kapott. A Chess új, állandó relatív ID-ja
-`./tablet-app-v3`, induló URL-je `./tablet.html`, scope-ja `./tablet.html`,
+változat feliratozott saját ikont kapott. A Chess új, állandó, explicit ID-ja
+`/chess/credit-chess/stockfish/tablet-app-v3`, induló URL-je `./tablet.html`, scope-ja `./tablet.html`,
 display módja `fullscreen`. Az ID-t további kiadásoknál nem kell változtatni.
 A Unicode/Calculator már egyedi ID-jait és eredeti induló URL-jeit megtartottuk.
 A két meglévő Unicode 7 `install-sample` belépő is megmarad.

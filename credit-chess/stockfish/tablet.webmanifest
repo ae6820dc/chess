@@ -1,5 +1,5 @@
 {
-  "id": "./tablet-app-v3",
+  "id": "/chess/credit-chess/stockfish/tablet-app-v3",
   "name": "Credit Chess Tablet",
   "short_name": "Chess Tablet",
   "start_url": "./tablet.html",

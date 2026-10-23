@@ -22,7 +22,11 @@ def launch(cdp,identity,start):
  deadline=time.monotonic()+20
  while time.monotonic()<deadline:
   info=cdp.send('Target.getTargetInfo',{'targetId':result['targetId']})['targetInfo']
-  if info['url']==start:return result['targetId']
+  if info['url']==start:
+   # Keep installation, close the test launch window (Chess intentionally
+   # permits only one writer tab for clock/credit integrity).
+   cdp.send('Target.closeTarget',{'targetId':result['targetId']})
+   return result['targetId']
   time.sleep(.1)
  raise AssertionError(f'Wrong launch: {identity}: {info}')
 with sync_playwright() as p:
@@ -48,7 +52,7 @@ with sync_playwright() as p:
    page.goto(BASE+entry);ready(page)
    data=page.evaluate("""async()=>{const href=document.querySelector('link[rel=manifest]').href;
     const m=await(await fetch(href,{cache:'no-store'})).json();const start=new URL(m.start_url,href).href;
-    return {manifest:href,id:new URL(m.id,start).href,start,scope:new URL(m.scope,href).href};}""")
+    return {manifest:href,id:new URL(m.id,new URL(start).origin+'/').href,start,scope:new URL(m.scope,href).href};}""")
    # Chromium's own manifest parser must accept the intended ID, URL and scope.
    parsed=context.new_cdp_session(page).send('Page.getAppManifest')
    assert not [e for e in parsed.get('errors',[]) if e.get('critical')],parsed

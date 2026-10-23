@@ -10,7 +10,7 @@ files += [(p,'/9062/'+str(p.relative_to(OTHER))) for p in OTHER.rglob('*.webmani
 apps=[]
 for path,url in files:
  m=json.loads(path.read_text());manifest=origin+url
- start=urljoin(manifest,m['start_url']); scope=urljoin(manifest,m['scope']); identity=urljoin(start,m['id'])
+ start=urljoin(manifest,m['start_url']); scope=urljoin(manifest,m['scope']); identity=urljoin(origin+'/',m['id'])
  assert start.startswith(scope),(path,start,scope)
  assert identity.startswith(origin+'/') and '#' not in identity,(path,identity)
  assert m['display'] in ('standalone','fullscreen')
