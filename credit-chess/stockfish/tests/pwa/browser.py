@@ -18,6 +18,7 @@ def ready(page):
  page.wait_for_function("navigator.serviceWorker.controller !== null",timeout=60000)
  page.evaluate('navigator.serviceWorker.ready.then(()=>true)')
 def launch(cdp,identity,start):
+ before={target['targetId'] for target in cdp.send('Target.getTargets')['targetInfos']}
  result=cdp.send('PWA.launch',{'manifestId':identity})
  deadline=time.monotonic()+20
  while time.monotonic()<deadline:
@@ -26,7 +27,10 @@ def launch(cdp,identity,start):
    # Keep installation, close the test launch window (Chess intentionally
    # permits only one writer tab for clock/credit integrity).
    # Native app windows are CDP targets outside Playwright's page list.
-   session=cdp.send('Target.attachToTarget',{'targetId':result['targetId'],'flatten':False})['sessionId']
+   targets=cdp.send('Target.getTargets')['targetInfos']
+   pages=[target for target in targets if target['type']=='page' and target['url']==start and target['targetId'] not in before]
+   assert len(pages)==1,{'launch':info,'targets':targets}
+   session=cdp.send('Target.attachToTarget',{'targetId':pages[0]['targetId'],'flatten':False})['sessionId']
    messages=[]
    def receive(event):
     if event.get('sessionId')==session:
@@ -40,6 +44,7 @@ def launch(cdp,identity,start):
    cdp.remove_listener('Target.receivedMessageFromTarget',receive)
    cdp.send('Target.detachFromTarget',{'sessionId':session})
    assert messages,messages
+   assert 'result' in messages[0],messages
    mode=messages[0]['result']['result']['value']
    assert mode['body']>0 and (mode['fullscreen'] or mode['standalone']),mode
    results.setdefault('launch_modes',{})[identity]=mode
