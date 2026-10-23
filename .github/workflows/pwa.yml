@@ -1,0 +1,60 @@
+name: PWA and regression tests
+on:
+  push:
+    paths: ['credit-chess/stockfish/**', '.github/workflows/pwa.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: credit-chess/stockfish/package-lock.json
+      - run: npm ci
+        working-directory: credit-chess/stockfish
+      - run: npx playwright install --with-deps chromium
+        working-directory: credit-chess/stockfish
+      - run: npm test
+        working-directory: credit-chess/stockfish
+      - run: CHROMIUM_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())") npm run test:browser
+        working-directory: credit-chess/stockfish
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-results
+          path: credit-chess/stockfish/test-results
+  multiple-pwas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: chess
+      - uses: actions/checkout@v4
+        with:
+          repository: ae6820dc/9062
+          ref: e54d9664364696b312f2c46bdd3a91765eea90b7
+          path: '9062'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install playwright==1.56.0
+      - run: python chess/credit-chess/stockfish/tests/pwa/check-config.py
+      - run: |
+          python chess/credit-chess/stockfish/tests/pwa/server.py &
+          for attempt in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:4174/chess/credit-chess/stockfish/tablet.html > /dev/null && break
+            sleep 1
+          done
+          xvfb-run -a python chess/credit-chess/stockfish/tests/pwa/browser.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: multiple-pwa-results
+          path: pwa-results.json

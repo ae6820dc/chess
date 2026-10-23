@@ -8,7 +8,8 @@ http.createServer(async (req, res) => {
     if (!path.startsWith(root + sep)) throw Error();
     const file = new URL(req.url, 'http://localhost').pathname.endsWith('/') ? path + '/index.html' : path;
     const data = await readFile(file);
-    res.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'application/javascript', '.wasm': 'application/wasm', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' })[extname(file)] || 'application/octet-stream');
+    res.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'application/javascript', '.wasm': 'application/wasm', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png' })[extname(file)] || 'application/octet-stream');
     res.end(data);
   } catch { res.writeHead(404); res.end('Not found'); }
 }).listen(4173, '127.0.0.1');
+

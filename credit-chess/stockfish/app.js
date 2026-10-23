@@ -386,10 +386,11 @@ async function init(){
   if(!lock){notice('Another chess tab is open. Close it and reload this page to protect clocks and credits.',true);return;}
   canWrite=true;
   try {await ensureArenaHistory();await loadCurrent();
-   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').then(async reg=>{await navigator.serviceWorker.ready;$('storage-status').textContent='Offline cache ready. IndexedDB stores profiles and games.';}).catch(e=>{$('storage-status').textContent='Offline caching unavailable: '+e.message;});
+   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(async reg=>{await navigator.serviceWorker.ready;$('storage-status').textContent='Offline cache ready. IndexedDB stores profiles and games.';}).catch(e=>{$('storage-status').textContent='Offline caching unavailable: '+e.message;});
    if(navigator.storage?.persist){navigator.storage.persist().then(granted=>{if(!granted)$('storage-status').textContent+=' Browser storage may be evicted; export regular backups.';});}
   }catch(e){notice('Local storage/application error: '+e.message+'. Reload to retry. Do not clear browser data without a backup.',true);}
   await new Promise(()=>{});
  }).catch(e=>notice('Cannot acquire local storage lock: '+e.message,true));
 }
 init().catch(e=>notice('Local storage unavailable: '+e.message+'. Check browser storage permissions and reload.',true));
+
