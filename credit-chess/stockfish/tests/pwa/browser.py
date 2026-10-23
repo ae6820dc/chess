@@ -83,6 +83,8 @@ with sync_playwright() as p:
     assert parsed['parsed']['scope']==data['scope'],parsed
    assert not any(data['id']==a['id'] or data['start'].startswith(a['scope']) or a['start'].startswith(data['scope']) for a in apps)
    cdp.send('PWA.install',{'manifestId':data['id'],'installUrlOrBundleUrl':BASE+entry})
+   # CDP installs use desktop user preferences; explicitly choose app windows.
+   cdp.send('PWA.changeAppUserSettings',{'manifestId':data['id'],'displayMode':'standalone'})
    launch(cdp,data['id'],data['start'])
    apps.append(data);results['installed'].append(data);print('INSTALLED',data['id'],flush=True)
   # All remain installed together; re-launch every app after the LAST install.
