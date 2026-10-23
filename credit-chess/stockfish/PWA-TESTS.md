@@ -90,3 +90,41 @@ nem olvashatók ki. Nincs böngészőadat-törlésre vagy tömeges eltávolítá
 vonatkozó lépés. A korábbi mentések megtartása kötelező.
 
 Igazolt desktop Chrome PWA-futás: [39990839599](https://github.com/ae6820dc/chess/actions/runs/39990839599). A multiple-pwas job sikeres: 20 egyidejű telepítés és ismételt saját-URL indítás, 22 offline navigáció, 4 legális offline WASM-lépés, 8 Desktop/Tablet méretellenőrzés, változatlan profil/kreditsnapshot. Ez nem Android-teszt.
+
+## Teljes regresszió és eredeti verzió összehasonlítása
+
+A teljes Playwright-készlet eredménye **110 sikeres / 113 teszt**. A három
+hibás eset: Desktop és Tablet maximum board forgatási teszt, valamint a
+Tablet orientation/adjustable durations teszt. A mobilos emulációban a
+1366×768 mérethez a böngésző 1373×772 layout viewportot és 0.994901657
+visualViewport.scale értéket jelent; a meglévő layout.js pontosan 1-es scale
+mellett frissíti a magasságot, így 1366px marad a korábbi beállításból.
+
+A [39991545417 futás](https://github.com/ae6820dc/chess/actions/runs/39991545417)
+a javítás előtti `868934c41ae8512a810acc3e22ba7bb1d95d31c8` verzión is
+lefuttatta ugyanezt a három tesztet: ugyanazokkal az értékekkel hibásak.
+A PWA-javítás nem módosítja a layout.js-t, a CSS-t, a sakk- vagy mentési
+működést. Ez a korábbi forgatási megjelenítési hiba **nyitott korlátozás**;
+a teljes regressziós készlet nem zöld. A PWA-specifikus sikeres ellenőrzést
+ettől külön kell értelmezni.
+
+## Végső PWA-specifikus eredmény
+
+A [39993097056 futás multiple-pwas jobja](https://github.com/ae6820dc/chess/actions/runs/39993097056)
+sikeres a végleges, biztonsági zónán belüli ikonokkal is. 20 telepítés,
+20 ismételt saját-URL indítás az összes telepítés megtartása mellett,
+22 offline navigáció, 8 Desktop/Tablet viewport, változatlan IndexedDB
+profil/kreditsnapshot és 4 legális offline WASM-lépés igazolt.
+A 22 manifest és 40 maskable PNG ellenőrzése is sikeres.
+
+A desktop CDP telepítés után a teszt explicit alkalmazásablakos
+felhasználói beállítást választ (`PWA.changeAppUserSettings`, standalone).
+A natív Chrome tab target gyermek page targetjében ellenőrzött tényleges
+`display-mode: standalone` mind a 20 alkalmazásnál igaz. A Chess manifest
+`fullscreen` deklarációja megvan, de a desktop próba standalone módot mért;
+valódi Android fullscreen/WebAPK siker ebből nem állítható.
+A PWA.launch eredményét nem emulált ablakokkal helyettesíti a teszt.
+
+A `pwa-results.json` artifact rögzíti az URL-eket, nézetméreteket,
+megjelenítési módokat és motormozgásokat. A tesztek ideiglenes Chrome
+profilban futnak, felhasználói böngészőadatot nem érintenek.
