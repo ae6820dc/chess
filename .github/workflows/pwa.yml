@@ -24,6 +24,17 @@ jobs:
         working-directory: credit-chess/stockfish
       - run: CHROMIUM_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())") npm run test:browser
         working-directory: credit-chess/stockfish
+      - name: Compare viewport failures with original version
+        if: failure()
+        continue-on-error: true
+        working-directory: credit-chess/stockfish
+        run: |
+          git fetch --depth=1 origin 868934c41ae8512a810acc3e22ba7bb1d95d31c8
+          git worktree add /tmp/chess-pwa-baseline FETCH_HEAD
+          ln -s "$GITHUB_WORKSPACE/credit-chess/stockfish/node_modules" /tmp/chess-pwa-baseline/credit-chess/stockfish/node_modules
+          cp tests/browser/board-size.spec.js /tmp/chess-pwa-baseline/credit-chess/stockfish/tests/browser/board-size.spec.js
+          cd /tmp/chess-pwa-baseline/credit-chess/stockfish
+          CHROMIUM_PATH=$(node -e "console.log(require('@playwright/test').chromium.executablePath())") npx playwright test board-size.spec.js tablet-animation.spec.js --grep 'maximum board|tablet orientation'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -39,12 +50,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ae6820dc/9062
-          ref: e54d9664364696b312f2c46bdd3a91765eea90b7
+          ref: cce076c7479002138254ae4f67bc84678feb8e78
           path: '9062'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install playwright==1.56.0
+      - run: pip install -r chess/credit-chess/stockfish/tests/pwa/requirements.txt
       - run: python chess/credit-chess/stockfish/tests/pwa/check-config.py
       - run: |
           python chess/credit-chess/stockfish/tests/pwa/server.py &

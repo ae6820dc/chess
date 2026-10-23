@@ -25,6 +25,18 @@ def launch(cdp,identity,start):
   if info['url']==start:
    # Keep installation, close the test launch window (Chess intentionally
    # permits only one writer tab for clock/credit integrity).
+   found=False
+   for candidate in context.pages:
+    session=context.new_cdp_session(candidate)
+    target=session.send('Target.getTargetInfo')['targetInfo']['targetId']
+    session.detach()
+    if target==result['targetId']:
+     expect(candidate.locator('body')).to_be_visible()
+     mode=candidate.evaluate("({fullscreen:matchMedia('(display-mode: fullscreen)').matches,standalone:matchMedia('(display-mode: standalone)').matches})")
+     assert mode['fullscreen'] or mode['standalone'],mode
+     results.setdefault('launch_modes',{})[identity]=mode
+     found=True;break
+   assert found,'App launch target not visible to browser automation'
    cdp.send('Target.closeTarget',{'targetId':result['targetId']})
    return result['targetId']
   time.sleep(.1)

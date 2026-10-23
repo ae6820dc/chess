@@ -18,7 +18,7 @@ for(const entry of ['desktop.html','tablet.html']) {
     const measurements=[];
     for(const [width,height] of sizes) {
       await page.setViewportSize({width,height});
-      await expect.poll(()=>page.evaluate(()=>parseFloat(document.documentElement.style.getPropertyValue('--app-height')))).toBe(height);
+      await expect.poll(()=>page.evaluate(()=>parseFloat(document.documentElement.style.getPropertyValue('--app-height'))),{message:JSON.stringify(await page.evaluate(()=>({innerWidth,innerHeight,visualHeight:visualViewport.height,scale:visualViewport.scale,appHeight:document.documentElement.style.getPropertyValue('--app-height')})))}).toBe(height);
       // Close optional setup panels to measure the playing surface.
       await page.evaluate(async()=>{const {setPane}=await import('./layout.js');setPane('none');});
       await expect.poll(()=>page.locator('#board').evaluate(e=>{

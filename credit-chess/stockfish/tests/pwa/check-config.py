@@ -1,7 +1,8 @@
-"""No dependencies: audit identities, disjoint app scopes, PNGs and source invariants."""
+"""Audit identities, disjoint app scopes, PNGs and maskable safe circles."""
 from pathlib import Path
 from urllib.parse import urljoin
-import json, os, struct
+import json, math, os, struct
+from PIL import Image
 ROOT=Path(__file__).resolve().parents[4]
 OTHER=Path(os.environ.get('PWA_9062_ROOT',ROOT.parent/'9062'))
 origin='https://ae6820dc.github.io'
@@ -19,6 +20,9 @@ for path,url in files:
    item=next(i for i in m['icons'] if i.get('purpose','any')==purpose and i['sizes']==f'{size}x{size}')
    raw=(path.parent/item['src']).read_bytes()
    assert raw[:8]==b'\x89PNG\r\n\x1a\n' and struct.unpack('>II',raw[16:24])==(size,size)
+   if purpose=='maskable':
+    image=Image.open(path.parent/item['src']).convert('RGB');bg=image.getpixel((0,0))
+    assert all(pixel==bg or math.hypot((n%size+.5)/size-.5,(n//size+.5)/size-.5)<=.4 for n,pixel in enumerate(image.getdata())),(path,item['src'],'maskable safe circle')
  apps.append({'manifest':manifest,'id':identity,'start_url':start,'scope':scope})
 assert len({a['id'] for a in apps})==len(apps),'duplicate application IDs'
 assert len({a['start_url'] for a in apps})==len(apps),'duplicate launch URLs'

@@ -55,7 +55,7 @@ változatlanok. A 9062 program HTML/JS fájljait nem módosítja a javítás.
 - `npm test`: a meglévő 50 egységteszt.
 - `npm run test:browser`: a meglévő 113 Playwright böngészőteszt.
 - `python tests/pwa/check-config.py`: mindkét checkout alapján 22 manifest
-  egyedi ID/start URL, egymást nem fedő scope, PNG méret és ikonellenőrzés.
+  egyedi ID/start URL, egymást nem fedő scope, PNG méret, ikon- és maskable biztonságizóna-ellenőrzés.
 - `python tests/pwa/server.py`, majd `xvfb-run -a python tests/pwa/browser.py`:
   ugyanazon localhost originen `/chess/` és `/9062/` útvonalak; natív desktop
   Chrome CDP PWA.install/PWA.launch teszt az összes 9 Unicode, 10 Calculator
@@ -64,6 +64,7 @@ változatlanok. A 9062 program HTML/JS fájljait nem módosítja a javítás.
   IndexedDB-profil/kreditegyenleg megőrzése, valamint Desktop/Tablet nézet
   360×800, 412×915, 768×1024 és 1024×768 méretben.
 
+Előkészítés: `pip install -r tests/pwa/requirements.txt`.
 A két checkout legyen testvérmappában, vagy a `PWA_9062_ROOT` adja meg a
 9062 checkout helyét. `PWA_BROWSER_PATH` felülírja a Google Chrome binárist.
 A GitHub Actions `PWA and regression tests` munkafolyamat mindkét tesztágat
@@ -87,3 +88,5 @@ megismétlendő. Desktop Chromium sikere ezt nem helyettesíti.
 A készülék korábban telepített alkalmazásainak URL-jei ebben a környezetben
 nem olvashatók ki. Nincs böngészőadat-törlésre vagy tömeges eltávolításra
 vonatkozó lépés. A korábbi mentések megtartása kötelező.
+
+Igazolt desktop Chrome PWA-futás: [39990839599](https://github.com/ae6820dc/chess/actions/runs/39990839599). A multiple-pwas job sikeres: 20 egyidejű telepítés és ismételt saját-URL indítás, 22 offline navigáció, 4 legális offline WASM-lépés, 8 Desktop/Tablet méretellenőrzés, változatlan profil/kreditsnapshot. Ez nem Android-teszt.
