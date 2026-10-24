@@ -1,0 +1,12 @@
+[
+  {
+    "application": "creditChess",
+    "id": "credit-chess",
+    "group": "Credit Chess",
+    "name": "Choose Desktop or Tablet",
+    "path": "credit-chess/stockfish/index.html",
+    "kind": "chess",
+    "programId": "47f4d94492933a3b0a3f406e6e4ce412",
+    "storageKey": "bbebe43a0b38a335"
+  }
+]

@@ -1,0 +1,21 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'io.github.ae6820dc.studio'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig { testInstrumentationRunner 'io.github.ae6820dc.studio.SmokeInstrumentation'; minSdk 26; targetSdk 36; versionCode 1; versionName '1.0' }
+    signingConfigs { stableDebug { storeFile file('../signing/studio-debug.jks'); storePassword 'android'; keyAlias 'unicode-test'; keyPassword 'android' } }
+    buildTypes { debug { signingConfig signingConfigs.stableDebug } }
+    flavorDimensions += 'studio'
+    productFlavors {
+        creditChess { dimension 'studio'; applicationId 'io.github.ae6820dc.creditchess'; resValue 'string', 'app_name', 'Credit Chess' }
+    }
+    sourceSets.main.res.srcDirs = [layout.buildDirectory.dir('generated/resources/main')]
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets.creditChess.assets.srcDirs = [layout.buildDirectory.dir('generated/offline/creditChess')]
+}
+def prepare = tasks.register('prepareOfflineAssets', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'python3', 'prepare-assets.py'
+}
+tasks.named('preBuild').configure { dependsOn prepare }
