@@ -60,7 +60,7 @@ public final class SmokeInstrumentation extends Instrumentation {
                     require("true".equals(eval("document.querySelector('#error').hidden && !document.querySelector('#result').hidden")),"calculator offline worker result "+id);
                 }
                 if("chess".equals(p.getString("kind"))){
-                    eval("import('./engine.js').then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
+                    eval("import(new URL('./engine.js',location.href).href).then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
                     waitFor("!!window.__engineProof || !!window.__engineError");
                     require("true".equals(eval("!!window.__engineProof && /^[a-h][1-8][a-h][1-8]/.test(window.__engineProof.move)")),"Stockfish WASM worker legal-format move: "+eval("JSON.stringify({proof:window.__engineProof,error:window.__engineError})"));
                 }
