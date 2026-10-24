@@ -1,0 +1,11 @@
+[
+  {
+    "file": "android-distributions/credit-chess.apk",
+    "package": "io.github.ae6820dc.creditchess",
+    "versionCode": 1,
+    "bytes": 6515525,
+    "sha256": "b7960ee77d10f9386895887e368134edc7bd137e5884ffb299e6053ced26be7a",
+    "programs": 1,
+    "originalAssets": 34
+  }
+]
