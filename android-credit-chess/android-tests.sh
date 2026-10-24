@@ -2,7 +2,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ADB="${ANDROID_HOME:?Set ANDROID_HOME}/platform-tools/adb"
-"$ADB" get-serialno | rg '^emulator-' >/dev/null || { echo 'Use a dedicated emulator; tests change its application state.'; exit 1; }
+case "$("$ADB" get-serialno)" in
+  emulator-*) ;;
+  *) echo 'Use a dedicated emulator; tests change its application state.'; exit 1 ;;
+esac
 "$ADB" shell cmd connectivity airplane-mode enable
 python3 - <<'PY'
 import json,os,subprocess
