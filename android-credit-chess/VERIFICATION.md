@@ -6,11 +6,11 @@ Both repositories retain all original application HTML, JavaScript, CSS, Program
 
 ## Build and packaged assets
 
-All three application assemble and lint tasks passed locally. All three native test APKs also compiled. `verify-apks.py` passed ZIP integrity, apksigner v2 signature validation, package IDs, versionCode, API levels, non-fullscreen theme, absence of internet permission, original Program ID catalog uniqueness, and SHA-256/byte comparisons of every source asset with the APK. Signing uses the existing public test certificate SHA-256 `01059a5e2a9f61d6b88aff4f2b47bc4e33195b352ba01872858f71fd358ffb1e`. These are debug builds, not private-key production releases.
+All three application assemble and lint tasks passed locally. The table records the delivered CI-built APK (Temurin JDK 21.0.12), downloaded from its committed path and reverified locally. The original assets and host helper script are byte-identical to the locally tested assets; compiler/compression differences account for the different APK hash from the initial local JDK 21.0.8 build. All three native test APKs also compiled. `verify-apks.py` passed ZIP integrity, apksigner v2 signature validation, package IDs, versionCode, API levels, non-fullscreen theme, absence of internet permission, original Program ID catalog uniqueness, and SHA-256/byte comparisons of every source asset with the APK. Signing uses the existing public test certificate SHA-256 `01059a5e2a9f61d6b88aff4f2b47bc4e33195b352ba01872858f71fd358ffb1e`. These are debug builds, not private-key production releases.
 
 | APK | Package | versionCode | Bytes | SHA-256 |
 | --- | --- | ---: | ---: | --- |
-| `android-distributions/credit-chess.apk` | `io.github.ae6820dc.creditchess` | 1 | 6646836 | `895323cb31514e7ca4d2f0ec9cc6504a2750d1e82bd07a9dc127929927d091dc` |
+| `android-distributions/credit-chess.apk` | `io.github.ae6820dc.creditchess` | 1 | 6515525 | `b7960ee77d10f9386895887e368134edc7bd137e5884ffb299e6053ced26be7a` |
 
 The source catalog and original storage keys are recorded in `android-distributions/programs.json`. Mathematics Studio includes all five families in both editions (10 programs, 116 original resource files). Unicode Studio includes versions 1–9 with all three samples (27 programs). Credit Chess includes 34 original resources, including the actual Stockfish JS/WASM, chess.js, licenses and corresponding-source archive. Gzip assets are stored with an internal `.bin` suffix so AAPT does not decompress them; their original request URLs are mapped to the unchanged bytes.
 
@@ -38,3 +38,20 @@ The KVM-enabled GitHub Actions job builds and runs the included native instrumen
 ## Migration and installation
 
 The HTML readmes document browser export/import for calculators and Chess using their original validated backup controls. A browser-console export snippet handles Unicode versions 1–9, with explicit confirmation before native import. The native localStorage backup is scoped to one program and never substitutes for Credit Chess's full IndexedDB backup. New package IDs do not read or overwrite old browser/APK data. Existing APK paths are untouched. Compatible future signed updates should use `adb install -r` and a higher versionCode; never uninstall to preserve data.
+
+## Successful KVM-backed Android verification
+
+The later native run succeeded: [Credit Chess Android run 40090456852](https://github.com/ae6820dc/chess/actions/runs/40090456852). Both `build` and `android-runtime` jobs passed on Android 16/API 36. This supersedes the earlier local software-emulator limitation for the checks actually executed below.
+
+- Portrait seed process: 12 checks passed. Fresh landscape verification process: 14 checks passed (26 total).
+- The original local HTTPS origin loaded in airplane mode; state survived reload, host switching and a separate instrumentation process.
+- The actual original Stockfish Web Worker initialized the packaged WASM, reported Elo range 1320–3190, and returned `e2e4` from the initial position. The native assertion checks move format; the separately reported packaged browser test validates four real engine moves using chess.js.
+- Original storage/core APIs created a local profile and an active saved Arena fixture. The original Desktop application's actual Pause and Stop handlers were invoked and their visible status text checked.
+- The original full-backup validator accepted profiles/games/stopped Arena data. The stopped Arena series and account survived the fresh process invocation.
+- Both Android system bars were visible and actual WebView bounds stayed between them in portrait and landscape.
+
+The injected test's first attempt used a relative dynamic import, which Android evaluated with an `about:blank` script base. The harness now resolves module URLs explicitly against the current document; original application module code, HTTPS origins, Program IDs, storage keys and application data were not changed to address that test issue.
+
+The binary commit is [75c2adab7441994149c71725cfad9fc28918d871](https://github.com/ae6820dc/chess/commit/75c2adab7441994149c71725cfad9fc28918d871). The actual APK was downloaded, checked against its committed SHA-256, verified again with apksigner and byte-for-byte source comparisons, and passed the APK-extracted browser suite again. Subsequent changes to native tests did not change this application binary.
+
+Remaining limits: no physical device, pre-API-36 runtime, native Android tablet emulator, or Android document-provider export/import roundtrip was tested. Arena setup uses original storage APIs and the native controls are invoked programmatically; the full opening-generator/UI navigation, responsive tablet layouts, encryption/import, animation, Elo settings and clocks have the separately reported original browser/unit regression coverage. The successful Mathematics/Unicode Android run is documented in the 9062 repository; its results are independent of this one.
