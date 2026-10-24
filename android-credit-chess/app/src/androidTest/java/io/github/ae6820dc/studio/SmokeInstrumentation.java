@@ -62,7 +62,7 @@ public final class SmokeInstrumentation extends Instrumentation {
                 if("chess".equals(p.getString("kind"))){
                     eval("import('./engine.js').then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
                     waitFor("!!window.__engineProof || !!window.__engineError");
-                    require("true".equals(eval("!!window.__engineProof && /^[a-h][1-8][a-h][1-8]/.test(window.__engineProof.move)")),"Stockfish WASM worker legal-format move");
+                    require("true".equals(eval("!!window.__engineProof && /^[a-h][1-8][a-h][1-8]/.test(window.__engineProof.move)")),"Stockfish WASM worker legal-format move: "+eval("JSON.stringify({proof:window.__engineProof,error:window.__engineError})"));
                 }
                 final boolean[] bars={false},geometry={false};
                 runOnMainSync(()->{
