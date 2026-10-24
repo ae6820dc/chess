@@ -63,6 +63,27 @@ public final class SmokeInstrumentation extends Instrumentation {
                     eval("import(new URL('./engine.js',location.href).href).then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
                     waitFor("!!window.__engineProof || !!window.__engineError");
                     require("true".equals(eval("!!window.__engineProof && /^[a-h][1-8][a-h][1-8]/.test(window.__engineProof.move)")),"Stockfish WASM worker legal-format move: "+eval("JSON.stringify({proof:window.__engineProof,error:window.__engineError})"));
+                    if("verify".equals(arguments.getString("phase"))){
+                        eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=await s.readBackup();window.__chessPersisted=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped')}).catch(e=>window.__chessStateError=String(e))");
+                        waitFor("window.__chessPersisted===true || !!window.__chessStateError");
+                        require("true".equals(eval("window.__chessPersisted===true")),"Credit Chess accounts and stopped Arena survive process restart");
+                    }
+                    eval("location.href=new URL('./desktop.html',location.href).href");
+                    waitFor("location.pathname.endsWith('/desktop.html') && document.readyState==='complete' && !!window.studioDownload");
+                    eval("(async()=>{const s=await import(new URL('./storage.js',location.href).href),c=await import(new URL('./core.js',location.href).href);let d=await s.read();if(!d.profiles.length)await s.createProfile('1111');d=await s.read();const p=d.profiles[0];p.prefs.responseDelay=10;await s.savePrefs(p.id,p.prefs);const g=c.newGame(p,p.prefs,'arena',[]);g.arena={remaining:1000000,speed:2000,depth:1,rank:'0',pending:false};await s.saveGame(g);window.__arenaFixture=true})().catch(e=>window.__arenaError=String(e))");
+                    waitFor("!!window.__arenaFixture || !!window.__arenaError");
+                    require("true".equals(eval("!!window.__arenaFixture")),"Credit Chess IndexedDB account and Arena setup");
+                    eval("delete window.studioDownload");runOnMainSync(()->web.reload());
+                    waitFor("document.readyState==='complete' && !!window.studioDownload && !!document.getElementById('arena-stop') && !document.getElementById('arena-stop').hidden");
+                    eval("document.getElementById('arena-pause').click()");
+                    waitFor("document.getElementById('game-status').textContent==='Arena paused'");
+                    require(true,"Credit Chess Arena Pause");
+                    eval("document.getElementById('arena-stop').click()");
+                    waitFor("document.getElementById('notice').textContent.includes('Arena stopped')");
+                    require(true,"Credit Chess Arena Stop");
+                    eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=s.validateBackup(await s.readBackup());window.__backupValid=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped')}).catch(e=>window.__backupError=String(e))");
+                    waitFor("window.__backupValid===true || !!window.__backupError");
+                    require("true".equals(eval("window.__backupValid===true")),"Credit Chess accounts, games and Arena backup validate");
                 }
                 final boolean[] bars={false},geometry={false};
                 runOnMainSync(()->{
