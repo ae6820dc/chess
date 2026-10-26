@@ -1,0 +1,23 @@
+{
+  "name": "stockfish-19-credit-chess",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/*.test.js",
+    "test:browser": "playwright test",
+    "serve": "node tests/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "dependencies": {
+    "chess.js": "1.4.0",
+    "stockfish": "19.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  },
+  "private": true
+}

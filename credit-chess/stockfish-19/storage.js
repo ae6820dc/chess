@@ -1,0 +1,203 @@
+import {validArenaCount} from './arena.js';
+import {validIntent} from './premoves.js';
+import { chessFor, integer, payout, pgn, DEFAULTS } from './core.js';
+export const SCHEMA=1;
+export const empty=()=>({schemaVersion:SCHEMA,profiles:[],games:[],lastProfile:null});
+// Fixed application identifiers; never generate these at launch.
+export const PROGRAM_ID='af55f489f53544ca8df607b627748719';
+export const STORAGE_KEY='sf19-credit-chess-v1';
+let db,opening;
+function connect(name,target=false){
+ return new Promise((resolve,reject)=>{
+  const r=indexedDB.open(name,1);let failed=false;
+  r.onupgradeneeded=()=>{r.result.createObjectStore('data');if(target)r.result.createObjectStore('metadata');};
+  r.onsuccess=()=>{if(failed)r.result.close();else resolve(r.result);};
+  r.onerror=()=>reject(r.error);
+  r.onblocked=()=>{failed=true;reject(Error('Storage upgrade blocked. Close other chess tabs.'));};
+ });
+}
+// This edition never opens or migrates another edition's databases.
+export async function openStorage(){
+ if(db)return db;
+ if(!opening)opening=connect(STORAGE_KEY,true).then(target=>{
+  db=target;db.onversionchange=()=>{target.close();db=null;};return db;
+ }).finally(()=>{opening=null;});
+ return opening;
+}
+export async function read(key='snapshot') {
+ const d=await openStorage();return new Promise((resolve,reject)=>{const t=d.transaction('data'),r=t.objectStore('data').get(key);r.onsuccess=()=>resolve(r.result || (key==='snapshot'?empty():null));r.onerror=()=>reject(r.error);});
+}
+export async function mutate(fn) {
+ const d=await openStorage();return new Promise((resolve,reject)=>{
+  const t=d.transaction('data','readwrite'),s=t.objectStore('data'),r=s.get('snapshot');let result;
+  r.onsuccess=()=>{try { const data=r.result||empty();result=fn(data,s);archiveFinished(data,s);s.put(data,'snapshot'); }catch(e){t.abort();reject(e);}};
+  t.oncomplete=()=>resolve(result);t.onerror=()=>reject(t.error || Error('IndexedDB write failed'));t.onabort=()=>reject(t.error || Error('Storage transaction aborted'));
+ });
+}
+// Spill completed history in small immutable chunks in the existing data store.
+// Snapshot manifests contain small chunk references and ordering bounds, never
+// all archived game positions.
+// Keeping the manifest in the snapshot also makes recovery an exact, atomic swap.
+const HISTORY_CHUNK=100;
+function archiveFinished(data,store){
+ const candidates=data.games.filter(g=>g.mode==='arena'&&g.status==='finished'&&!g.arena?.pending);
+ if(candidates.length<=HISTORY_CHUNK*2)return;
+ // Keep the latest game for each profile available to the existing resume path.
+ const latest=new Map();for(const g of data.games){const old=latest.get(g.profileId);if(!old||g.created>=old.created)latest.set(g.profileId,g);}
+ const eligible=candidates.filter(g=>latest.get(g.profileId)!==g).sort((a,b)=>compareOrder(gameOrder(a),gameOrder(b)));
+ while(eligible.length>HISTORY_CHUNK){
+  const games=eligible.splice(0,HISTORY_CHUNK),key='history:'+crypto.randomUUID();
+  store.add(games,key);(data.historyChunks??=[]).push({key,oldest:gameOrder(games[0]),newest:gameOrder(games.at(-1)),profiles:[...new Set(games.map(g=>g.profileId))]});
+  const ids=new Set(games.map(g=>g.id));data.games=data.games.filter(g=>!ids.has(g.id));
+ }
+}
+async function historyChunk(key){
+ const games=await read(key);if(!Array.isArray(games))throw Error('Archived history is missing; existing records were retained');return games;
+}
+const gameOrder=g=>[g.created,g.id];
+const compareOrder=(a,b)=>a[0]-b[0]||a[1].localeCompare(b[1],'en');
+// Select a bounded page by (creation time, ID), including imported older games.
+// Manifest bounds skip chunks older than the page; only one chunk is read at
+// a time. Neither archive navigation nor normal autosaves load the full history.
+export async function archivePage(profileId,cursor=null,limit=50,seriesId=null){
+ if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw Error('Invalid archive page size');
+ const data=await read();let games=[];
+ const add=rows=>{
+  games.push(...rows.filter(g=>g.profileId===profileId&&(!seriesId||g.arena?.seriesId===seriesId)&&(!cursor||compareOrder(gameOrder(g),cursor)<0)));
+  games.sort((a,b)=>compareOrder(gameOrder(b),gameOrder(a)));games=games.slice(0,limit+1);
+ };
+ add(data.games);
+ const chunks=(data.historyChunks||[]).filter(c=>c.profiles.includes(profileId)).sort((a,b)=>compareOrder(b.newest,a.newest));
+ for(const chunk of chunks){
+  if(cursor&&compareOrder(chunk.oldest,cursor)>=0)continue;
+  if(games.length>limit&&compareOrder(chunk.newest,gameOrder(games.at(-1)))<0)break;
+  add(await historyChunk(chunk.key));
+ }
+ const more=games.length>limit;games=games.slice(0,limit);
+ return {games,next:more?gameOrder(games.at(-1)):null};
+}
+// Backups retain the existing import resource bounds. Fail explicitly rather
+// than exporting a partial history or loading an unbounded archive into RAM.
+export async function readBackup(){
+ const data=await read(),keys=data.historyChunks||[];delete data.historyChunks;
+ let bytes=new TextEncoder().encode(JSON.stringify(data)).length;
+ if(bytes>20*1024*1024||data.games.length>10000)throw Error('Full backup exceeds the existing 20 MB / 10,000 game limit');
+ for(const {key} of keys){
+  const games=await historyChunk(key);bytes+=new TextEncoder().encode(JSON.stringify(games)).length;
+  if(bytes>20*1024*1024||data.games.length+games.length>10000)throw Error('Full backup exceeds the existing 20 MB / 10,000 game limit. Results remain saved; export individual PGNs from the paged archive.');
+  data.games.push(...games);
+ }
+ return data;
+}
+export function recordArena(data,g,existing){
+ if(g.mode!=='arena')return;
+ const id=g.arena.seriesId||(g.arena.seriesId=g.id);
+ const series=(data.arenaSeries??=[]).find(s=>s.id===id);
+ const row=series||{id,profileId:g.profileId,created:g.created,status:'running',completed:0,white:0,black:0,draws:0,whitePoints:0,blackPoints:0,config:{difficulty:g.difficulty,base:g.clock.base,increment:g.clock.increment,...g.arena}};
+ if(!series)data.arenaSeries.push(row);
+ if(g.status==='finished'&&g.result!=='*'&&existing?.status!=='finished'){
+  row.completed++;if(g.result==='1-0')row.white++;else if(g.result==='0-1')row.black++;else row.draws++;
+  row.whitePoints=row.white+row.draws/2;row.blackPoints=row.black+row.draws/2;
+ }
+ if(g.status==='active'||g.arena.pending){row.status='running';delete row.finished;}
+ if(g.arena.stopped||g.status==='finished'&&!g.arena.pending){row.status=g.arena.stopped?'stopped':'completed';row.finished=g.updated;}
+}
+// Upgrade legacy series once, including chunked games, without copying histories.
+export async function ensureArenaHistory(){
+ const data=await read();if(data.arenaHistoryVersion===1)return;
+ const summary={arenaSeries:[]},last=new Map();
+ const upgrade=rows=>{
+  rows.sort((a,b)=>compareOrder(gameOrder(a),gameOrder(b)));
+  for(const g of rows){if(g.mode!=='arena')continue;const prev=last.get(g.profileId);
+   g.arena.seriesId??=prev&&prev.remaining===g.arena.remaining+1&&BigInt(prev.rank)+1n===BigInt(g.arena.rank)?prev.seriesId:g.id;
+   last.set(g.profileId,{...g.arena});recordArena(summary,g,null);
+  }
+ };
+ // Read and rewrite only one immutable history chunk at a time. A failed
+ // upgrade can safely run again: summaries are rebuilt rather than incremented.
+ for(const c of (data.historyChunks||[]).slice().sort((a,b)=>compareOrder(a.oldest,b.oldest))){
+  const rows=await historyChunk(c.key);upgrade(rows);const db=await openStorage();
+  await new Promise((resolve,reject)=>{const t=db.transaction('data','readwrite');t.objectStore('data').put(rows,c.key);t.oncomplete=resolve;t.onerror=t.onabort=()=>reject(t.error);});
+ }
+ await mutate(d=>{upgrade(d.games);d.arenaSeries=summary.arenaSeries;d.arenaHistoryVersion=1;});
+}
+
+export async function stopArena(game){
+ const snapshot=structuredClone(game);snapshot.arena.stopped=true;snapshot.arena.pending=false;
+ if(snapshot.status==='active'){snapshot.status='finished';snapshot.result='*';snapshot.reason='Arena stopped · unfinished game';snapshot.finished=Date.now();snapshot.updated=snapshot.finished;snapshot.clock.paused=true;snapshot.settled=true;snapshot.endingBalance=snapshot.startingBalance;snapshot.revision++;}
+ snapshot.pgn=pgn(snapshot);
+ return mutate(data=>{const i=data.games.findIndex(g=>g.id===snapshot.id);if(i<0)throw Error('Arena game missing');const profile=data.profiles.find(p=>p.id===snapshot.profileId);if(!profile)throw Error('Profile missing');snapshot.settled=true;snapshot.endingBalance=profile.balance;const existing=data.games[i];data.games[i]=snapshot;recordArena(data,snapshot,existing);return snapshot;});
+}
+export async function saveGame(game) {
+ const snapshot=structuredClone(game);snapshot.pgn=pgn(snapshot);
+ return mutate(data=>{
+  const profile=data.profiles.find(p=>p.id===snapshot.profileId);if(!profile)throw Error('Profile missing');
+  const i=data.games.findIndex(g=>g.id===snapshot.id),existing=data.games[i];
+  if(existing && (existing.settled || existing.revision>snapshot.revision)) return existing;
+  if(snapshot.status==='finished'&&!snapshot.settled){profile.balance=(BigInt(profile.balance)+payout(snapshot)).toString();snapshot.settled=true;snapshot.endingBalance=profile.balance;}
+  recordArena(data,snapshot,existing);if(i<0)data.games.push(snapshot);else data.games[i]=snapshot;return snapshot;
+ });
+}
+export async function savePrefs(id,prefs){return mutate(data=>{const p=data.profiles.find(p=>p.id===id);if(!p)throw Error('Profile missing');p.prefs=structuredClone(prefs);});}
+export const bytesToBase64=bytes=>{let str='';for(const b of bytes)str+=String.fromCharCode(b);return btoa(str);};
+export const fromBase64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function derive(password,salt,usage) {
+ const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits','deriveKey']);
+ const spec={name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'};
+ return usage?crypto.subtle.deriveKey(spec,base,{name:'AES-GCM',length:256},false,usage):new Uint8Array(await crypto.subtle.deriveBits(spec,base,256));
+}
+export const isGenerated=p=>p?.kind==='generated'&&/^[0-9A-F]{8}$/.test(p.name)&&!p.auth;
+export async function createProfile(pin) {
+ if(pin!=='1111')throw Error('Incorrect creation PIN');
+ return mutate(data=>{
+  if(data.profiles.length>=1000)throw Error('Profile limit reached');
+  let name;
+  do{name=Array.from(crypto.getRandomValues(new Uint8Array(4)),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}while(data.profiles.some(p=>p.name===name));
+  const profile={id:crypto.randomUUID(),kind:'generated',name,balance:'100000',prefs:structuredClone(DEFAULTS),created:Date.now()};
+  data.profiles.push(profile);data.lastProfile=profile.id;return profile;
+ });
+}
+export async function selectProfile(id){return mutate(data=>{const p=data.profiles.find(p=>p.id===id&&isGenerated(p));if(!p)throw Error('Generated profile missing');data.lastProfile=id;return p;});}
+export function validateBackup(data){
+ if(data?.historyChunks!==undefined&&(!Array.isArray(data.historyChunks)||data.historyChunks.some(c=>!c||typeof c.key!=='string'||!/^history:[0-9a-f-]{36}$/.test(c.key)||!Array.isArray(c.oldest)||!Number.isFinite(c.oldest[0])||typeof c.oldest[1]!=='string'||!Array.isArray(c.newest)||!Number.isFinite(c.newest[0])||typeof c.newest[1]!=='string'||!Array.isArray(c.profiles)||c.profiles.some(id=>typeof id!=='string'))))throw Error('Invalid history manifest');
+ if(!data||data.schemaVersion!==SCHEMA||!Array.isArray(data.profiles)||!Array.isArray(data.games)||data.profiles.length>1000||data.games.length>10000)throw Error('Unsupported or invalid backup schema');
+ if(data.arenaSeries!==undefined&&(!Array.isArray(data.arenaSeries)||data.arenaSeries.some(s=>!s||typeof s.id!=='string'||!data.profiles.some(p=>p.id===s.profileId)||!['running','completed','stopped'].includes(s.status)||!Number.isFinite(s.created)||!s.config||['completed','white','black','draws'].some(k=>!Number.isSafeInteger(s[k])||s[k]<0)||s.completed!==s.white+s.black+s.draws||s.whitePoints!==s.white+s.draws/2||s.blackPoints!==s.black+s.draws/2)))throw Error('Invalid arena history');
+ const names=new Set(),ids=new Set(),gids=new Set(),activeProfiles=new Set();
+ for(const p of data.profiles){
+  if(typeof p.id!=='string'||ids.has(p.id)||typeof p.name!=='string'||p.name.length>60||!p.name.trim())throw Error('Invalid profile');ids.add(p.id);
+  integer(p.balance,'Balance',true);
+  if(p.kind==='generated'){if(!isGenerated(p)||names.has(p.name))throw Error('Invalid generated username');names.add(p.name);}else if(p.auth?.iterations!==310000||fromBase64(p.auth.salt).length!==16||fromBase64(p.auth.hash).length!==32)throw Error('Invalid password record');
+  const f=p.prefs;if(!f||!['wood','gold','green','midnight'].includes(f.theme)||!Number.isFinite(f.base)||f.base<1||f.base>86400||!Number.isFinite(f.increment)||f.increment<0||f.increment>3600||!['w','b'].includes(f.color)||typeof f.sound!=='boolean'||!['1320','2000','2800','3190','MAX'].includes(f.difficulty)||!Number.isInteger(f.openingDepth)||f.openingDepth<1||f.openingDepth>3)throw Error('Invalid preferences');
+  if(f.responseDelay!==undefined&&(!Number.isFinite(f.responseDelay)||f.responseDelay<0||f.responseDelay>300))throw Error('Invalid response delay');
+  if(f.animationDuration!==undefined&&![0,250,400,600,800,1000].includes(f.animationDuration))throw Error('Invalid animation duration');
+  integer(f.openingRank,'Opening cursor');integer(f.stake,'Stake');for(const level of Object.keys(DEFAULTS.multipliers))integer(f.multipliers?.[level],'Multiplier');
+ }
+ for(const g of data.games){
+  if(typeof g.id!=='string'||gids.has(g.id)||!ids.has(g.profileId)||!['rated','analysis','arena'].includes(g.mode)||!['active','finished'].includes(g.status)||!['*','1-0','0-1','1/2-1/2'].includes(g.result)||!['w','b'].includes(g.player)||!['1320','2000','2800','3190','MAX'].includes(g.difficulty)||typeof g.reason!=='string')throw Error('Invalid game');gids.add(g.id);
+  if(g.premoves!==undefined&&(!Array.isArray(g.premoves)||!g.premoves.every(validIntent)))throw Error('Invalid premove queue');
+  integer(g.stake,'Stake');integer(g.multiplier,'Multiplier');integer(g.startingBalance,'Starting balance',true);if(g.endingBalance!==null)integer(g.endingBalance,'Ending balance',true);
+  if(!Array.isArray(g.moves)||g.moves.length>10000||g.moves.some(m=>typeof m!=='string'||! /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m))||!Number.isInteger(g.openingPlies)||g.openingPlies<0||g.openingPlies>g.moves.length)throw Error('Invalid moves');chessFor(g);
+  if(!g.clock||typeof g.clock.paused!=='boolean'||!Number.isFinite(g.clock.base)||g.clock.base<1||g.clock.base>86400||!Number.isFinite(g.clock.increment)||g.clock.increment<0||g.clock.increment>3600||['w','b','since'].some(k=>!Number.isFinite(g.clock[k])||g.clock[k]<0)||!Number.isInteger(g.revision)||g.revision<0||![g.created,g.updated].every(Number.isFinite)||typeof g.settled!=='boolean')throw Error('Invalid clock or timestamps');
+  if(g.status==='active'&&(g.result!=='*'||g.settled||g.finished!==null||activeProfiles.has(g.profileId)))throw Error('Invalid or duplicate active game');
+  if(g.status==='active')activeProfiles.add(g.profileId);
+  if(g.mode==='arena'){const a=g.arena;if(a?.stopped!==undefined&&typeof a.stopped!=='boolean'||a?.seriesId!==undefined&&typeof a.seriesId!=='string')throw Error('Invalid arena identity');if(!a||!validArenaCount(a.remaining)||!Number.isInteger(a.speed)||a.speed<20||a.speed>2000||!Number.isInteger(a.depth)||a.depth<1||a.depth>3||typeof a.pending!=='boolean')throw Error('Invalid arena series');integer(a.rank,'Arena cursor');if(BigInt(a.rank)>=[0n,20n,400n,8902n][a.depth])throw Error('Invalid arena rank');}
+  if(g.status==='finished'&&((g.result==='*'&&!g.arena?.stopped)||!g.settled||!Number.isFinite(g.finished)||g.endingBalance===null))throw Error('Invalid finished game');
+ }
+ return data;
+}
+export async function importBackup(input){
+ if(input?.historyChunks!==undefined)throw Error('Backup must contain games, not internal history references');
+ const incoming=validateBackup(structuredClone(input));
+ return mutate((data,store)=>{
+  store.put(structuredClone(data),'recovery');let addedProfiles=0,addedGames=0,conflicts=0;
+  const accepted=new Set();
+  for(const p of incoming.profiles){if(data.profiles.some(x=>x.id===p.id||(isGenerated(p)&&x.name===p.name))){conflicts++;continue;}if(data.profiles.some(x=>x.name===p.name))p.name=p.name.slice(0,40)+' (imported '+p.id.slice(0,6)+')';data.profiles.push(structuredClone(p));accepted.add(p.id);addedProfiles++;}
+  for(const g of incoming.games){if(!accepted.has(g.profileId)||data.games.some(x=>x.id===g.id)){conflicts++;continue;}data.games.push(structuredClone(g));addedGames++;}
+  if(addedGames)delete data.arenaHistoryVersion;
+  for(const row of incoming.arenaSeries||[])if(accepted.has(row.profileId)&&!(data.arenaSeries||[]).some(s=>s.id===row.id))(data.arenaSeries??=[]).push(structuredClone(row));
+  return {addedProfiles,addedGames,conflicts};
+ });
+}
+export async function restoreRecovery(){const recovery=await read('recovery');if(!recovery)throw Error('No pre-import recovery copy');validateBackup(recovery);return mutate((data,s)=>{s.put(structuredClone(data),'recovery');delete data.historyChunks;delete data.arenaSeries;delete data.arenaHistoryVersion;Object.assign(data,recovery);});}
+export async function encryptBackup(data,password){if(password.length<8)throw Error('Backup password must have at least 8 characters');const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await derive(password,salt,['encrypt']);const bytes=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));return {encrypted:true,schemaVersion:1,salt:bytesToBase64(salt),iv:bytesToBase64(iv),ciphertext:bytesToBase64(new Uint8Array(bytes))};}
+export async function decryptBackup(data,password){if(data.schemaVersion!==1||fromBase64(data.salt).length!==16||fromBase64(data.iv).length!==12)throw Error('Invalid encrypted backup');const key=await derive(password,fromBase64(data.salt),['decrypt']);try{return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:fromBase64(data.iv)},key,fromBase64(data.ciphertext))));}catch{throw Error('Wrong password or damaged encrypted backup');}}

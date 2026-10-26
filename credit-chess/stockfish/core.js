@@ -69,5 +69,5 @@ export function payout(game) {
  const won=game.result===(game.player==='w'?'1-0':'0-1');return won?BigInt(game.stake)*BigInt(game.multiplier):-BigInt(game.stake);
 }
 export function pgn(game) {
- const c=chessFor(game);c.header('Event',`Stockfish Credit Chess (${game.mode})`,'White',game.mode==='arena'||game.player==='b'?'Stockfish 18':'Local player','Black',game.mode==='arena'||game.player==='w'?'Stockfish 18':'Local player','Result',game.result,'Date',new Date(game.created).toISOString().slice(0,10).replaceAll('-','.'),'TimeControl',`${game.clock.base}+${game.clock.increment}`,'Termination',game.reason||'In progress');return c.pgn();
+ const c=chessFor(game);c.header('Event',`Stockfish 18 Credit Chess (${game.mode})`,'White',game.mode==='arena'||game.player==='b'?'Stockfish 18':'Local player','Black',game.mode==='arena'||game.player==='w'?'Stockfish 18':'Local player','Result',game.result,'Date',new Date(game.created).toISOString().slice(0,10).replaceAll('-','.'),'TimeControl',`${game.clock.base}+${game.clock.increment}`,'Termination',game.reason||'In progress');return c.pgn();
 }

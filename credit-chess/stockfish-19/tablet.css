@@ -1,0 +1,42 @@
+/* Only tablet.html loads these rules; desktop geometry stays in style.css. */
+body[data-interface=tablet] { height:100vh; height:100dvh; height:var(--app-height,100dvh); display:grid; grid-template-rows:auto minmax(0,1fr) auto; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+body[data-interface=tablet] main { min-height:0; overflow:auto; width:100%; }
+body[data-interface=tablet].unlocked main { overflow:visible; }
+#panel-close { display:none; }
+@media (max-width:899px), (max-height:599px) {
+  .play-layout { position:relative; grid-template-rows:minmax(0,1fr)!important; }
+  .play-layout aside { position:absolute; z-index:5; inset:0; display:grid; grid-template-rows:auto minmax(0,1fr); background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:8px; gap:8px; }
+  .play-layout[data-pane=none] aside { display:none; }
+  aside .panel { height:auto; overflow:auto; }
+  #panel-close { display:block; justify-self:end; }
+  .clock { font-size:22px; padding:4px 10px; }
+  #club nav button { min-height:44px; padding:8px; }
+  .panel-tools > button,.panel-tools summary,.play-toolbar .actions button { min-height:44px; }
+}
+@media (min-width:900px) and (min-height:600px) {
+  #tab-play { grid-template-columns:minmax(0,1fr) minmax(0,320px); grid-template-rows:auto minmax(0,1fr); gap:8px 12px; }
+  .play-toolbar { grid-column:2; grid-row:1; grid-template-columns:1fr; }
+  .play-layout { display:contents; }
+  .board-wrap { grid-column:1; grid-row:1 / -1; }
+  aside { grid-column:2; grid-row:2; display:grid; grid-template-rows:minmax(0,3fr) minmax(0,2fr); }
+  aside .panel { display:block!important; height:auto; }
+  #history-panel { display:grid!important; }
+  #match-toggle,#history-toggle { display:none; }
+}
+@media (min-width:600px) and (max-height:599px) {
+  #tab-play { position:relative; }
+  .play-layout aside { left:calc(100% - 320px); }
+  .unlocked header { padding-block:3px; }
+  .unlocked main { padding-block:3px; gap:3px; }
+  #club { gap:3px; }
+}
+
+@media (min-width:600px) and (max-height:599px) {
+  #club > nav { width:320px; justify-self:end; }
+  #tab-play .board-wrap { margin-top:-47px; }
+  .play-layout aside { display:grid; }
+  .play-layout[data-pane=none] aside { display:none; }
+  .play-layout[data-pane=history] #history-panel { display:grid; }
+}
+
+@media (min-width:600px) and (max-height:599px) { .play-layout aside { grid-row:1 / -1; } }

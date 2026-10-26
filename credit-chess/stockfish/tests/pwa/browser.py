@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[4]
 OTHER=Path(os.environ.get('PWA_9062_ROOT',ROOT.parent/'9062'))
 entries=[f'/9062/unicode/{v}/sample{n}.html' for v in (7,8,9) for n in (1,2,3)]
 entries += [f'/9062/calculator/{folder.name}/sample{n}.html' for folder in sorted((OTHER/'calculator').iterdir()) if (folder/'manifest1.webmanifest').exists() for n in (1,2)]
-entries += [CHESS+'tablet.html']
+entries += [CHESS+'tablet.html',CHESS.replace('/stockfish/','/stockfish-19/')+'tablet.html']
 results={'environment':'desktop Chrome, native CDP PWA install/launch; NOT Android','installed':[],'offline':[],'viewports':[]}
 atexit.register(lambda: Path('pwa-results.json').write_text(json.dumps(results,indent=2)))
 def ready(page):

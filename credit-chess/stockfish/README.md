@@ -1,3 +1,5 @@
+See [independent engine editions and verification](../EDITIONS.md).
+
 ## Choose a version
 
 Open `index.html` for the manual, responsive version chooser. Choose **Desktop**
@@ -10,7 +12,7 @@ IndexedDB namespace and active profile. Returning to the chooser does not modify
 saved games, credits or preferences. Keep using the same browser and origin to
 access existing data.
 
-# Stockfish Credit Chess
+# Stockfish 18 Credit Chess
 
 Static chess application for `ae6820dc/chess`. Desktop and tablet/phone entry points share all game, engine and storage modules.
 

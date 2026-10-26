@@ -1,0 +1,36 @@
+{
+  "id": "/chess/credit-chess/stockfish-19/tablet-app-v3",
+  "name": "Stockfish 19 Credit Chess",
+  "short_name": "SF18 Chess",
+  "start_url": "./tablet.html",
+  "scope": "./tablet.html",
+  "display": "fullscreen",
+  "background_color": "#18211f",
+  "theme_color": "#18211f",
+  "icons": [
+    {
+      "src": "./icons/tablet-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/tablet-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/tablet-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/tablet-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

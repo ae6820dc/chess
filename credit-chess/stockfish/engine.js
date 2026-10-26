@@ -7,6 +7,7 @@ export class StockfishAdapter {
     this.options = [];
     this.worker.onmessage = ({ data }) => {
       for (const line of String(data).split('\n')) {
+        if (line.startsWith('id name ')) this.engineName = line.slice(8);
         if (line.startsWith('option ')) this.options.push(line);
         for (const w of [...this.waiters]) if (w.match(line)) { this.waiters.splice(this.waiters.indexOf(w), 1); clearTimeout(w.timer); w.resolve(line); }
       }
@@ -25,6 +26,7 @@ export class StockfishAdapter {
   async initialize() {
     this.onStatus('Loading Stockfish 18…');
     const uci = this.wait(l => l === 'uciok'); this.send('uci'); await uci;
+    if (!/^Stockfish 18\b/.test(this.engineName || '')) throw new Error('Unexpected engine identity: ' + this.engineName);
     const option = this.options.find(l => l.startsWith('option name UCI_Elo '));
     const range = option?.match(/min (\d+) max (\d+)/);
     if (!range || !this.options.some(l => l.startsWith('option name UCI_LimitStrength '))) throw new Error('Engine lacks UCI strength controls');

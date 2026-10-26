@@ -7,6 +7,7 @@ ROOT=Path(__file__).resolve().parents[4]
 OTHER=Path(os.environ.get('PWA_9062_ROOT',ROOT.parent/'9062'))
 origin='https://ae6820dc.github.io'
 files=[(ROOT/'credit-chess/stockfish/tablet.webmanifest','/chess/credit-chess/stockfish/tablet.webmanifest')]
+files += [(ROOT/'credit-chess/stockfish-19/tablet.webmanifest','/chess/credit-chess/stockfish-19/tablet.webmanifest')]
 files += [(p,'/9062/'+str(p.relative_to(OTHER))) for p in OTHER.rglob('*.webmanifest') if p.parts[-3:-1] != ('tests','fixtures')]
 apps=[]
 for path,url in files:

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#18211f">
+<meta name="description" content="Choose your way to play Stockfish 19 Credit Chess: Desktop or Tablet. Your profiles, games and preferences stay with you.">
+<title>Choose your board · Stockfish 19 Credit Chess</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="landing.css">
+<link rel="manifest" href="./tablet.webmanifest"></head>
+<body>
+<main>
+<header><span class="mark" aria-hidden="true">♞</span><p>STOCKFISH 19 <strong>CREDIT CHESS</strong></p></header>
+<p class="eyebrow">YOUR NEXT MOVE</p>
+<h1>One game.<br>Choose your board.</h1>
+<p class="intro">Settle in for a game of chess. Pick the layout that feels right for your screen.</p>
+<nav aria-label="Choose your chess version">
+<a class="choice" href="desktop.html">
+<svg viewBox="0 0 80 64" aria-hidden="true"><rect x="8" y="5" width="64" height="43" rx="4"/><path d="M30 59h20M40 48v11"/><path class="screen" d="M16 13h48v27H16z"/></svg>
+<span class="choice-title">Desktop <span aria-hidden="true">→</span></span>
+<span class="description">Room to think. A full workspace for your keyboard and mouse.</span>
+<span class="cta">Open Desktop <span aria-hidden="true">→</span></span>
+</a>
+<a class="choice" href="tablet.html">
+<svg viewBox="0 0 80 64" aria-hidden="true"><rect x="17" y="3" width="46" height="58" rx="5"/><path class="screen" d="M24 11h32v39H24z"/><path d="M37 55h6"/></svg>
+<span class="choice-title">Tablet <span aria-hidden="true">→</span></span>
+<span class="description">Made for touch. A comfortable board for hands-on play.</span>
+<span class="cta">Open Tablet <span aria-hidden="true">→</span></span>
+</a>
+</nav>
+<footer><span aria-hidden="true">◇</span> Same profiles. Same saved games. Your choice.<br><small>Saved locally in this browser · Switch layouts anytime using the app logo.</small></footer>
+</main>
+<script>
+// Cache the chooser and both app entrypoints without opening or changing user storage.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+</script>
+</body>
+</html>

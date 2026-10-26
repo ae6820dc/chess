@@ -1,6 +1,6 @@
 // Runtime cache only: never touches IndexedDB or localStorage.
 const ROOT=new URL('./',self.location.href);
-const CACHE='stockfish-credit-chess-pwa-v13-'+ROOT.pathname;
+const CACHE='stockfish-credit-chess-pwa-v14-'+ROOT.pathname;
 const ASSETS=['./','index.html','landing.css','desktop.html','tablet.html','tablet.css','animation.js','app.js','credits.js','arena.js','layout.js','core.js','premoves.js','storage.js','engine.js','openings.js','opening-worker.js','style.css','board-layout.css','icon.svg','vendor/chess.js','vendor/stockfish-18-lite-single.js','vendor/stockfish-18-lite-single.wasm'];
 ASSETS.push('tablet.webmanifest','icons/tablet-192.png','icons/tablet-512.png','icons/tablet-maskable-192.png','icons/tablet-maskable-512.png');
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));

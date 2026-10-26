@@ -1,7 +1,7 @@
 {
   "id": "/chess/credit-chess/stockfish/tablet-app-v3",
-  "name": "Credit Chess Tablet",
-  "short_name": "Chess Tablet",
+  "name": "Stockfish 18 Credit Chess",
+  "short_name": "SF18 Chess",
   "start_url": "./tablet.html",
   "scope": "./tablet.html",
   "display": "fullscreen",

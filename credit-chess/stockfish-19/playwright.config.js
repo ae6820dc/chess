@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({testDir:'./tests/browser',workers:1,timeout:60000,use:{screenshot:'only-on-failure',baseURL:'http://127.0.0.1:4173',viewport:{width:412,height:915},isMobile:true,hasTouch:true,launchOptions:{executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',args:['--no-sandbox']}},webServer:{command:'node tests/server.js',url:'http://127.0.0.1:4173/credit-chess/stockfish-19/proof.html',reuseExistingServer:true}});
