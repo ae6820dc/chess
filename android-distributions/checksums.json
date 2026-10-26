@@ -1,10 +1,21 @@
 [
   {
-    "file": "android-distributions/credit-chess.apk",
+    "file": "android-distributions/Credit-Chess-18.apk",
     "package": "io.github.ae6820dc.creditchess",
+    "versionCode": 2,
+    "engine": 18,
+    "bytes": 6515785,
+    "sha256": "8c15c2ccda461558f2bb72c0ead163ecde8dc41453275027fa5ab980e989c0a5",
+    "programs": 1,
+    "originalAssets": 34
+  },
+  {
+    "file": "android-distributions/Credit-Chess-19.apk",
+    "package": "io.github.ae6820dc.creditchess19",
     "versionCode": 1,
-    "bytes": 6515681,
-    "sha256": "dca3a2e785a760cee29f466f6d75de76d0216d628cf5aa3997e6b80cc96331c3",
+    "engine": 19,
+    "bytes": 1853527,
+    "sha256": "1096308555db1a9c2e7f734fe87be72e82ffe280e12989481abc0d7e3b60fdc4",
     "programs": 1,
     "originalAssets": 34
   }
