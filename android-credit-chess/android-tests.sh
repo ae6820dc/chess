@@ -19,7 +19,11 @@ def run(spec,phase):
  subprocess.run([adb,'shell','settings','put','system','user_rotation','1' if phase=='verify' else '0'],check=True)
  result=subprocess.run([adb,'shell','am','instrument','-w','-e','phase',phase,runner],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=1800)
  print(result.stdout,flush=True)
- if result.returncode or 'PASS ' not in result.stdout or 'FAIL' in result.stdout:raise SystemExit('Android smoke failed: '+spec['package']+' '+phase)
+ if result.returncode or 'PASS ' not in result.stdout or 'FAIL' in result.stdout:
+  results=Path('../android-test-results');results.mkdir(exist_ok=True)
+  with (results/'failure.png').open('wb') as out:subprocess.run([adb,'exec-out','screencap','-p'],stdout=out)
+  with (results/'logcat.txt').open('w') as out:subprocess.run([adb,'logcat','-d','-t','1000'],stdout=out)
+  raise SystemExit('Android smoke failed: '+spec['package']+' '+phase)
 # Seed actual previous APK, including IndexedDB profiles, saved games and Arena.
 install(Path('../android-distributions/credit-chess.apk'))
 for flavor in specs:install(next(Path(f'app/build/outputs/apk/androidTest/{flavor}/debug').glob('*.apk')))

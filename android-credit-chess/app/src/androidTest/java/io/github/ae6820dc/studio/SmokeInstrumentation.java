@@ -94,12 +94,15 @@ public final class SmokeInstrumentation extends Instrumentation {
                     require(getTargetContext().getSharedPreferences("upgrade-verification",0).edit().putString("backup",snapshot).commit(),"upgrade fixture committed to disk");
                 }
                 final boolean[] bars={false},geometry={false};
+                for(int attempt=0;attempt<40;attempt++){
                 runOnMainSync(()->{
                     View decor=activity.getWindow().getDecorView();WindowInsets insets=decor.getRootWindowInsets();
                     if(android.os.Build.VERSION.SDK_INT>=30 && insets!=null)bars[0]=insets.isVisible(WindowInsets.Type.statusBars())&&insets.isVisible(WindowInsets.Type.navigationBars());
                     int[] pos=new int[2];web.getLocationOnScreen(pos);
                     if(android.os.Build.VERSION.SDK_INT>=30 && insets!=null){android.graphics.Insets safe=insets.getInsets(WindowInsets.Type.systemBars());geometry[0]=pos[1]>=safe.top && pos[1]+web.getHeight()<=decor.getHeight()-safe.bottom;}
                 });
+                if(bars[0]&&geometry[0])break;Thread.sleep(250);
+                }
                 require(bars[0],"both system bars visible "+id);require(geometry[0],"WebView between system bars "+id);
             }
             // Every marker must survive a complete second pass across origins.
