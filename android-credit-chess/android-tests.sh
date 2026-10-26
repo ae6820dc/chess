@@ -8,7 +8,7 @@ case "$("$ADB" get-serialno)" in
 esac
 "$ADB" shell cmd connectivity airplane-mode enable
 python3 - <<'PY'
-import json,os,subprocess
+import json,os,subprocess,time
 from pathlib import Path
 adb=str(Path(os.environ['ANDROID_HOME'])/'platform-tools/adb')
 specs=json.loads(Path('project.json').read_text())
@@ -37,5 +37,16 @@ for spec in specs.values():
  assert subprocess.check_output([adb,'shell','pidof',spec['package']],text=True).strip()
  print('Launcher resolved and process alive: '+spec['package'],flush=True)
 for spec in specs.values():run(spec,'verify')
+# Capture the actual Android launcher for visual review of both numbered icons.
+results=Path('../android-test-results');results.mkdir(exist_ok=True)
+subprocess.run([adb,'shell','settings','put','system','user_rotation','0'],check=True)
+subprocess.run([adb,'shell','input','keyevent','KEYCODE_HOME'],check=True)
+time.sleep(2)
+subprocess.run([adb,'shell','input','swipe','540','1700','540','300','500'],check=True)
+time.sleep(2)
+with (results/'launcher.png').open('wb') as out:subprocess.run([adb,'exec-out','screencap','-p'],stdout=out,check=True)
+subprocess.run([adb,'shell','uiautomator','dump','/sdcard/launcher.xml'],check=True)
+subprocess.run([adb,'pull','/sdcard/launcher.xml',str(results/'launcher.xml')],check=True)
+
 print('All packages tested offline; separate process invocations verified persisted state.')
 PY

@@ -67,10 +67,12 @@ public final class SmokeInstrumentation extends Instrumentation {
                     String edition=p.getString("path").contains("stockfish-19")?"19":"18";
                     require("true".equals(eval("window.__engineProof.name.startsWith('Stockfish "+edition+"')")),"engine UCI identity Stockfish "+edition);
                     if("verify".equals(arguments.getString("phase"))){
-                        eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=await s.readBackup();window.__chessPersisted=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped');const saved=JSON.parse(localStorage.getItem('studio.backup.probe'));window.__savedStateIntact=!!saved&&saved.profiles.every(p=>d.profiles.some(q=>JSON.stringify(p)===JSON.stringify(q)))&&saved.games.every(g=>d.games.some(h=>g.id===h.id&&JSON.stringify(g.moves)===JSON.stringify(h.moves)&&g.result===h.result))}).catch(e=>window.__chessStateError=String(e))");
+                        String savedBackup=getTargetContext().getSharedPreferences("upgrade-verification",0).getString("backup",null);
+                        require(savedBackup!=null,"durable upgrade fixture exists");
+                        eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=await s.readBackup();window.__chessPersisted=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped');const saved=JSON.parse("+JSONObject.quote(savedBackup)+");const canonical=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);window.__savedStateIntact=!!saved&&saved.profiles.every(p=>d.profiles.some(q=>canonical(p)===canonical(q)))&&saved.games.every(g=>d.games.some(h=>g.id===h.id&&canonical(g.moves)===canonical(h.moves)&&g.result===h.result));window.__stateDifference={saved,current:d}}).catch(e=>window.__chessStateError=String(e))");
                         waitFor("window.__chessPersisted===true || !!window.__chessStateError");
                         require("true".equals(eval("window.__chessPersisted===true")),"Credit Chess accounts and stopped Arena survive process restart");
-                        require("true".equals(eval("window.__savedStateIntact===true")),"saved profiles, balances, preferences and game moves preserved across update/restart");
+                        require("true".equals(eval("window.__savedStateIntact===true")),"saved profiles, balances, preferences and game moves preserved across update/restart: "+eval("window.__savedStateIntact ? 'identical' : JSON.stringify(window.__stateDifference)"));
                     }
                     eval("location.href=new URL('./desktop.html',location.href).href");
                     waitFor("location.pathname.endsWith('/desktop.html') && document.readyState==='complete' && !!window.studioDownload");
@@ -85,9 +87,11 @@ public final class SmokeInstrumentation extends Instrumentation {
                     eval("document.getElementById('arena-stop').click()");
                     waitFor("document.getElementById('notice').textContent.includes('Arena stopped')");
                     require(true,"Credit Chess Arena Stop");
-                    eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=s.validateBackup(await s.readBackup());window.__backupValid=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped');localStorage.setItem('studio.backup.probe',JSON.stringify(d))}).catch(e=>window.__backupError=String(e))");
+                    eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=s.validateBackup(await s.readBackup());window.__backupValid=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped');window.__backupSnapshot=d}).catch(e=>window.__backupError=String(e))");
                     waitFor("window.__backupValid===true || !!window.__backupError");
                     require("true".equals(eval("window.__backupValid===true")),"Credit Chess accounts, games and Arena backup validate");
+                    String snapshot=(String)new JSONTokener(eval("JSON.stringify(window.__backupSnapshot)")).nextValue();
+                    require(getTargetContext().getSharedPreferences("upgrade-verification",0).edit().putString("backup",snapshot).commit(),"upgrade fixture committed to disk");
                 }
                 final boolean[] bars={false},geometry={false};
                 runOnMainSync(()->{

@@ -81,3 +81,8 @@ jobs:
           target: default
           profile: pixel_2
           script: android-credit-chess/android-tests.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-launcher-evidence
+          path: android-test-results/

@@ -5,7 +5,6 @@ from pathlib import Path
 import http.server,json,os,ssl,subprocess,tempfile,threading,urllib.parse,zipfile
 from playwright.sync_api import sync_playwright
 project=Path(__file__).resolve().parent;repo=project.parent
-names={'mathematics':'mathematics-studio','unicode':'unicode-studio','creditChess':'credit-chess'}
 with tempfile.TemporaryDirectory() as tmp:
  temp=Path(tmp);mapping={};entries=[]
  for flavor,info in json.loads((project/'project.json').read_text()).items():

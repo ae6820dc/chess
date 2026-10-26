@@ -3,8 +3,11 @@ from pathlib import Path
 import hashlib,json,os,re,subprocess,zipfile
 project=Path(__file__).resolve().parent;repo=project.parent
 sdk=Path(os.environ.get('ANDROID_HOME',str(Path.home()/'Android/Sdk')));tools=sdk/'build-tools/36.0.0'
-names={'mathematics':'mathematics-studio','unicode':'unicode-studio','creditChess':'credit-chess'}
 spec=json.loads((project/'project.json').read_text());report=[]
+assert len({info['package'] for info in spec.values()})==len(spec)
+previous=repo/'android-distributions/credit-chess.apk'
+old_cert=subprocess.check_output([str(tools/'apksigner'),'verify','--print-certs',str(previous)],text=True)
+assert '01059a5e2a9f61d6b88aff4f2b47bc4e33195b352ba01872858f71fd358ffb1e' in old_cert
 for flavor,info in spec.items():
  apk=repo/'android-distributions'/info['filename']
  cert=subprocess.check_output([str(tools/'apksigner'),'verify','--verbose','--print-certs',str(apk)],text=True)
@@ -12,6 +15,7 @@ for flavor,info in spec.items():
  badging=subprocess.check_output([str(tools/'aapt'),'dump','badging',str(apk)],text=True)
  assert f"package: name='{info['package']}' versionCode='{info['versionCode']}'" in badging
  assert "sdkVersion:'26'" in badging and "targetSdkVersion:'36'" in badging
+ assert f"application-label:'{info['name']}'" in badging
  assert 'android.permission.INTERNET' not in badging
  resources=subprocess.check_output([str(tools/'aapt'),'dump','--values','resources',str(apk)],text=True)
  assert re.search(r'Key=0x0101020d.*\(boolean\) false',resources)
@@ -28,6 +32,12 @@ for flavor,info in spec.items():
   assert len({p['programId'] for p in catalog})==len(catalog)
   for p in catalog:assert len(p['programId'])==32
   assert archive.read(f"assets/site/credit-chess/{info['source']}/vendor/stockfish-{info['engine']}-lite-single.wasm")[:4]==b'\0asm'
+  assert all(path.startswith('credit-chess/'+info['source']+'/') for path in digests)
+  if flavor=='creditChess':
+   with zipfile.ZipFile(previous) as old:
+    assert json.loads(old.read('assets/catalog.json'))==catalog
+    for name in old.namelist():
+     if name.startswith('assets/'):assert old.read(name)==archive.read(name),name
   assert catalog[0]['id']==info['originId']
   assert catalog[0]['path']==f"credit-chess/{info['source']}/index.html"
  row=dict(file=str(apk.relative_to(repo)),package=info['package'],versionCode=info['versionCode'],engine=info['engine'],bytes=apk.stat().st_size,sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),programs=len(catalog),originalAssets=len(digests))
