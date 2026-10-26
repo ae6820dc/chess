@@ -24,14 +24,15 @@ for flavor,info in spec.items():
   catalog=json.loads(archive.read('assets/catalog.json'))
   digests=json.loads(archive.read('assets/source-checksums.json'))
   for path,digest in digests.items():
-   embedded=archive.read('assets/site/'+path+('.bin' if path.endswith('.gz') else ''))
+   packaged=info['assetRoot']+'/'+str(Path(path).relative_to('credit-chess/'+info['source']))
+   embedded=archive.read('assets/site/'+packaged+('.bin' if path.endswith('.gz') else ''))
    assert hashlib.sha256(embedded).hexdigest()==digest
    assert embedded==(repo/path).read_bytes(),path
   assert archive.read('assets/host.js')==(project/'host.js').read_bytes()
   assert len({p['id'] for p in catalog})==len(catalog)
   assert len({p['programId'] for p in catalog})==len(catalog)
   for p in catalog:assert len(p['programId'])==32
-  assert archive.read(f"assets/site/credit-chess/{info['source']}/vendor/stockfish-{info['engine']}-lite-single.wasm")[:4]==b'\0asm'
+  assert archive.read(f"assets/site/{info['assetRoot']}/vendor/stockfish-{info['engine']}-lite-single.wasm")[:4]==b'\0asm'
   assert all(path.startswith('credit-chess/'+info['source']+'/') for path in digests)
   if flavor=='creditChess':
    with zipfile.ZipFile(previous) as old:
@@ -39,7 +40,7 @@ for flavor,info in spec.items():
     for name in old.namelist():
      if name.startswith('assets/'):assert old.read(name)==archive.read(name),name
   assert catalog[0]['id']==info['originId']
-  assert catalog[0]['path']==f"credit-chess/{info['source']}/index.html"
+  assert catalog[0]['path']==f"{info['assetRoot']}/index.html"
  row=dict(file=str(apk.relative_to(repo)),package=info['package'],versionCode=info['versionCode'],engine=info['engine'],bytes=apk.stat().st_size,sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),programs=len(catalog),originalAssets=len(digests))
  report.append(row);print(json.dumps(row))
 (repo/'android-distributions/checksums.json').write_text(json.dumps(report,indent=2)+'\n')

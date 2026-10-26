@@ -41,10 +41,14 @@ for flavor in spec:
         app=repo/'credit-chess'/info['source']
         sources=[p for p in app.rglob('*') if p.is_file() and p.suffix in extensions|{'.wasm'} and not any(x in p.relative_to(app).parts for x in ('tests','docs','node_modules','test-results','playwright-report')) and p.name not in ('package.json','package-lock.json','playwright.config.js')]
         storage=(app/'storage.js').read_text()
-        catalog.append(dict(id=info['originId'],group='Credit Chess',name='Choose Desktop or Tablet',path=f"credit-chess/{info['source']}/index.html",kind='chess',programId=re.search(r"PROGRAM_ID='([^']+)'",storage).group(1),storageKey=re.search(r"STORAGE_KEY='([^']+)'",storage).group(1)))
+        catalog.append(dict(id=info['originId'],group='Credit Chess',name='Choose Desktop or Tablet',path=f"{info['assetRoot']}/index.html",kind='chess',programId=re.search(r"PROGRAM_ID='([^']+)'",storage).group(1),storageKey=re.search(r"STORAGE_KEY='([^']+)'",storage).group(1)))
     checksums={}
     for source in sorted(set(sources)):
-        path=source.relative_to(repo);destination=output/'site'/(str(path)+('.bin' if source.suffix=='.gz' else ''));destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,destination)
+        path=source.relative_to(repo)
+        # Keep the proven host's /credit-chess/stockfish/ navigation allowlist.
+        # Each edition is packaged in its own APK and isolated origin.
+        packaged=Path(spec[flavor]['assetRoot'])/source.relative_to(app) if flavor in ('creditChess','creditChess19') else path
+        destination=output/'site'/(str(packaged)+('.bin' if source.suffix=='.gz' else ''));destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,destination)
         checksums[str(path)]=hashlib.sha256(source.read_bytes()).hexdigest()
     (output/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False,indent=2)+'\n')
     (output/'source-checksums.json').write_text(json.dumps(checksums,indent=2)+'\n')

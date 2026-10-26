@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory() as tmp:
     page.locator('#page').fill('7');page.locator('#generate').click();page.evaluate('studioSaveForm()')
    else:
     result=page.evaluate("""async()=>{const {StockfishAdapter}=await import('./engine.js');const {Chess}=await import('./vendor/chess.js');const a=new StockfishAdapter();try{const range=await a.ready,game=new Chess(),moves=[];for(let i=0;i<4;i++){const move=await a.move({moves,difficulty:'MAX',milliseconds:50});if(!game.move({from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]}))throw Error('Illegal engine move');moves.push(move)}return {range,moves,name:a.engineName}}finally{a.close()}}""")
-    assert len(result['moves'])==4;assert result['name'].startswith('Stockfish '+('19' if 'stockfish-19' in p['path'] else '18')); print('Packaged Stockfish WASM proof:',result,flush=True)
+    assert len(result['moves'])==4;assert result['name'].startswith('Stockfish '+('19' if p['id']=='credit-chess-19' else '18')); print('Packaged Stockfish WASM proof:',result,flush=True)
    for width,height in [(320,740),(740,320),(800,1280),(1280,800)]:
     page.set_viewport_size({'width':width,'height':height})
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),(p['id'],width)

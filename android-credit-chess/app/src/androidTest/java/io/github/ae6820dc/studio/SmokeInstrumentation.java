@@ -64,7 +64,7 @@ public final class SmokeInstrumentation extends Instrumentation {
                     eval("import(new URL('./engine.js',location.href).href).then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move,name:a.engineName};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
                     waitFor("!!window.__engineProof || !!window.__engineError");
                     require("true".equals(eval("!!window.__engineProof && /^[a-h][1-8][a-h][1-8]/.test(window.__engineProof.move)")),"Stockfish WASM worker legal-format move: "+eval("JSON.stringify({proof:window.__engineProof,error:window.__engineError})"));
-                    String edition=p.getString("path").contains("stockfish-19")?"19":"18";
+                    String edition=p.getString("id").equals("credit-chess-19")?"19":"18";
                     require("true".equals(eval("window.__engineProof.name.startsWith('Stockfish "+edition+"')")),"engine UCI identity Stockfish "+edition);
                     if("verify".equals(arguments.getString("phase"))){
                         String savedBackup=getTargetContext().getSharedPreferences("upgrade-verification",0).getString("backup",null);

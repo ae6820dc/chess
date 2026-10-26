@@ -6,7 +6,8 @@
     "engine": 18,
     "source": "stockfish",
     "filename": "Credit-Chess-18.apk",
-    "originId": "credit-chess"
+    "originId": "credit-chess",
+    "assetRoot": "credit-chess/stockfish"
   },
   "creditChess19": {
     "name": "Credit Chess 19",
@@ -15,6 +16,7 @@
     "engine": 19,
     "source": "stockfish-19",
     "filename": "Credit-Chess-19.apk",
-    "originId": "credit-chess-19"
+    "originId": "credit-chess-19",
+    "assetRoot": "credit-chess/stockfish"
   }
 }
