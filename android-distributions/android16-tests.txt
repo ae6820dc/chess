@@ -1,0 +1,47 @@
+GitHub Actions: https://github.com/ae6820dc/chess/actions/runs/40295340619
+Android 16 / API 36, Pixel 2 emulator, airplane mode enabled.
+Source: 7b0de5ba839491d4485090775abbd4357c3919f5
+Five instrumentation invocations: 15 + 19 + 15 + 19 + 19 = 87 assertions passed.
+2026-10-26T08:55:30.9466510Z PASS 15 Android checks
+2026-10-26T08:55:30.9472058Z Stockfish WASM worker legal-format move: "{\"proof\":{\"range\":{\"min\":1320,\"max\":3190},\"move\":\"e2e4\",\"name\":\"Stockfish 18 Lite WASM\"}}"
+2026-10-26T08:55:30.9473047Z engine UCI identity Stockfish 18
+2026-10-26T08:55:30.9474316Z Credit Chess Arena Pause
+2026-10-26T08:55:30.9475148Z Credit Chess Arena Stop
+2026-10-26T08:55:30.9477074Z both system bars visible io.github.ae6820dc.creditchess
+2026-10-26T08:55:30.9477928Z WebView between system bars io.github.ae6820dc.creditchess
+2026-10-26T08:55:40.3233294Z PASS 19 Android checks
+2026-10-26T08:55:40.3240935Z Stockfish WASM worker legal-format move: "{\"proof\":{\"range\":{\"min\":1320,\"max\":3190},\"move\":\"e2e4\",\"name\":\"Stockfish 18 Lite WASM\"}}"
+2026-10-26T08:55:40.3241914Z engine UCI identity Stockfish 18
+2026-10-26T08:55:40.3244261Z saved profiles, balances, preferences and game moves preserved across update/restart: "identical"
+2026-10-26T08:55:40.3246082Z Credit Chess Arena Pause
+2026-10-26T08:55:40.3246641Z Credit Chess Arena Stop
+2026-10-26T08:55:40.3248826Z both system bars visible io.github.ae6820dc.creditchess
+2026-10-26T08:55:40.3251907Z WebView between system bars io.github.ae6820dc.creditchess
+2026-10-26T08:55:46.7216829Z PASS 15 Android checks
+2026-10-26T08:55:46.7222032Z Stockfish WASM worker legal-format move: "{\"proof\":{\"range\":{\"min\":1320,\"max\":3190},\"move\":\"e2e4\",\"name\":\"Stockfish 19 Lite WASM\"}}"
+2026-10-26T08:55:46.7223050Z engine UCI identity Stockfish 19
+2026-10-26T08:55:46.7224449Z Credit Chess Arena Pause
+2026-10-26T08:55:46.7225231Z Credit Chess Arena Stop
+2026-10-26T08:55:46.7227392Z both system bars visible io.github.ae6820dc.creditchess19
+2026-10-26T08:55:46.7228261Z WebView between system bars io.github.ae6820dc.creditchess19
+2026-10-26T08:55:48.5196277Z Status: ok
+2026-10-26T08:55:50.0066187Z Status: ok
+2026-10-26T08:55:50.0836474Z Launcher resolved and process alive: io.github.ae6820dc.creditchess
+2026-10-26T08:55:50.1686291Z Launcher resolved and process alive: io.github.ae6820dc.creditchess19
+2026-10-26T08:55:58.4247320Z PASS 19 Android checks
+2026-10-26T08:55:58.4279127Z Stockfish WASM worker legal-format move: "{\"proof\":{\"range\":{\"min\":1320,\"max\":3190},\"move\":\"d2d4\",\"name\":\"Stockfish 18 Lite WASM\"}}"
+2026-10-26T08:55:58.4280225Z engine UCI identity Stockfish 18
+2026-10-26T08:55:58.4282946Z saved profiles, balances, preferences and game moves preserved across update/restart: "identical"
+2026-10-26T08:55:58.4284912Z Credit Chess Arena Pause
+2026-10-26T08:55:58.4285555Z Credit Chess Arena Stop
+2026-10-26T08:55:58.4287737Z both system bars visible io.github.ae6820dc.creditchess
+2026-10-26T08:55:58.4288605Z WebView between system bars io.github.ae6820dc.creditchess
+2026-10-26T08:56:06.2458609Z PASS 19 Android checks
+2026-10-26T08:56:06.2466713Z Stockfish WASM worker legal-format move: "{\"proof\":{\"range\":{\"min\":1320,\"max\":3190},\"move\":\"e2e3\",\"name\":\"Stockfish 19 Lite WASM\"}}"
+2026-10-26T08:56:06.2467841Z engine UCI identity Stockfish 19
+2026-10-26T08:56:06.2470488Z saved profiles, balances, preferences and game moves preserved across update/restart: "identical"
+2026-10-26T08:56:06.2472062Z Credit Chess Arena Pause
+2026-10-26T08:56:06.2472604Z Credit Chess Arena Stop
+2026-10-26T08:56:06.2474809Z both system bars visible io.github.ae6820dc.creditchess19
+2026-10-26T08:56:06.2475615Z WebView between system bars io.github.ae6820dc.creditchess19
+2026-10-26T08:56:13.7494530Z All packages tested offline; separate process invocations verified persisted state.
