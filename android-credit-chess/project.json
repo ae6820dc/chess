@@ -1,6 +1,20 @@
 {
   "creditChess": {
-    "name": "Credit Chess",
-    "package": "io.github.ae6820dc.creditchess"
+    "name": "Credit Chess 18",
+    "package": "io.github.ae6820dc.creditchess",
+    "versionCode": 2,
+    "engine": 18,
+    "source": "stockfish",
+    "filename": "Credit-Chess-18.apk",
+    "originId": "credit-chess"
+  },
+  "creditChess19": {
+    "name": "Credit Chess 19",
+    "package": "io.github.ae6820dc.creditchess19",
+    "versionCode": 1,
+    "engine": 19,
+    "source": "stockfish-19",
+    "filename": "Credit-Chess-19.apk",
+    "originId": "credit-chess-19"
   }
 }

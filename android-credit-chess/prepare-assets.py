@@ -36,11 +36,12 @@ for flavor in spec:
                 p=repo/f'unicode/{version}/sample{sample}.html';html=p.read_text();sources.append(p)
                 key=re.search(r"const STORAGE_KEY=['\"]([^'\"]+)",html)
                 catalog.append(dict(id=f'unicode-{version}-{sample}',group=f'Unicode {version}',name=f'Sample {sample}',path=str(p.relative_to(repo)),kind='unicode',programId=original_id(html),storageKey=key.group(1) if key else None))
-    elif flavor=='creditChess':
-        app=repo/'credit-chess/stockfish'
+    elif flavor in ('creditChess','creditChess19'):
+        info=spec[flavor]
+        app=repo/'credit-chess'/info['source']
         sources=[p for p in app.rglob('*') if p.is_file() and p.suffix in extensions|{'.wasm'} and not any(x in p.relative_to(app).parts for x in ('tests','docs','node_modules','test-results','playwright-report')) and p.name not in ('package.json','package-lock.json','playwright.config.js')]
         storage=(app/'storage.js').read_text()
-        catalog.append(dict(id='credit-chess',group='Credit Chess',name='Choose Desktop or Tablet',path='credit-chess/stockfish/index.html',kind='chess',programId=re.search(r"PROGRAM_ID='([^']+)'",storage).group(1),storageKey=re.search(r"STORAGE_KEY='([^']+)'",storage).group(1)))
+        catalog.append(dict(id=info['originId'],group='Credit Chess',name='Choose Desktop or Tablet',path=f"credit-chess/{info['source']}/index.html",kind='chess',programId=re.search(r"PROGRAM_ID='([^']+)'",storage).group(1),storageKey=re.search(r"STORAGE_KEY='([^']+)'",storage).group(1)))
     checksums={}
     for source in sorted(set(sources)):
         path=source.relative_to(repo);destination=output/'site'/(str(path)+('.bin' if source.suffix=='.gz' else ''));destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,destination)

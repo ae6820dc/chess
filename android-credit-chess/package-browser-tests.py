@@ -8,9 +8,9 @@ project=Path(__file__).resolve().parent;repo=project.parent
 names={'mathematics':'mathematics-studio','unicode':'unicode-studio','creditChess':'credit-chess'}
 with tempfile.TemporaryDirectory() as tmp:
  temp=Path(tmp);mapping={};entries=[]
- for flavor in json.loads((project/'project.json').read_text()):
+ for flavor,info in json.loads((project/'project.json').read_text()).items():
   directory=temp/flavor;directory.mkdir()
-  with zipfile.ZipFile(repo/f'android-distributions/{names[flavor]}.apk') as archive:archive.extractall(directory)
+  with zipfile.ZipFile(repo/'android-distributions'/info['filename']) as archive:archive.extractall(directory)
   catalog=json.loads((directory/'assets/catalog.json').read_text())
   for p in catalog:mapping[p['id']+'.appassets.androidplatform.net']=directory/'assets';entries.append((p,directory/'assets'))
  subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(temp/'key.pem'),'-out',str(temp/'cert.pem'),'-days','1','-subj','/CN=localhost'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -52,8 +52,8 @@ with tempfile.TemporaryDirectory() as tmp:
    elif p['kind']=='unicode':
     page.locator('#page').fill('7');page.locator('#generate').click();page.evaluate('studioSaveForm()')
    else:
-    result=page.evaluate("""async()=>{const {StockfishAdapter}=await import('./engine.js');const {Chess}=await import('./vendor/chess.js');const a=new StockfishAdapter();try{const range=await a.ready,game=new Chess(),moves=[];for(let i=0;i<4;i++){const move=await a.move({moves,difficulty:'MAX',milliseconds:50});if(!game.move({from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]}))throw Error('Illegal engine move');moves.push(move)}return {range,moves}}finally{a.close()}}""")
-    assert len(result['moves'])==4;print('Packaged Stockfish WASM proof:',result,flush=True)
+    result=page.evaluate("""async()=>{const {StockfishAdapter}=await import('./engine.js');const {Chess}=await import('./vendor/chess.js');const a=new StockfishAdapter();try{const range=await a.ready,game=new Chess(),moves=[];for(let i=0;i<4;i++){const move=await a.move({moves,difficulty:'MAX',milliseconds:50});if(!game.move({from:move.slice(0,2),to:move.slice(2,4),promotion:move[4]}))throw Error('Illegal engine move');moves.push(move)}return {range,moves,name:a.engineName}}finally{a.close()}}""")
+    assert len(result['moves'])==4;assert result['name'].startswith('Stockfish '+('19' if 'stockfish-19' in p['path'] else '18')); print('Packaged Stockfish WASM proof:',result,flush=True)
    for width,height in [(320,740),(740,320),(800,1280),(1280,800)]:
     page.set_viewport_size({'width':width,'height':height})
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),(p['id'],width)

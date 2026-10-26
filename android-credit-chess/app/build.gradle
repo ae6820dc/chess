@@ -8,10 +8,14 @@ android {
     buildTypes { debug { signingConfig signingConfigs.stableDebug } }
     flavorDimensions += 'studio'
     productFlavors {
-        creditChess { dimension 'studio'; applicationId 'io.github.ae6820dc.creditchess'; resValue 'string', 'app_name', 'Credit Chess' }
+        creditChess { dimension 'studio'; applicationId 'io.github.ae6820dc.creditchess'; versionCode 2; resValue 'string', 'app_name', 'Credit Chess 18' }
+        creditChess19 { dimension 'studio'; applicationId 'io.github.ae6820dc.creditchess19'; resValue 'string', 'app_name', 'Credit Chess 19' }
     }
     sourceSets.main.res.srcDirs = [layout.buildDirectory.dir('generated/resources/main')]
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets.creditChess.res.srcDirs = [layout.buildDirectory.dir('generated/resources/creditChess')]
+    sourceSets.creditChess19.res.srcDirs = [layout.buildDirectory.dir('generated/resources/creditChess19')]
+    sourceSets.creditChess19.assets.srcDirs = [layout.buildDirectory.dir('generated/offline/creditChess19')]
     sourceSets.creditChess.assets.srcDirs = [layout.buildDirectory.dir('generated/offline/creditChess')]
 }
 def prepare = tasks.register('prepareOfflineAssets', Exec) {

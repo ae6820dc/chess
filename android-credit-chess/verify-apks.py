@@ -6,11 +6,11 @@ sdk=Path(os.environ.get('ANDROID_HOME',str(Path.home()/'Android/Sdk')));tools=sd
 names={'mathematics':'mathematics-studio','unicode':'unicode-studio','creditChess':'credit-chess'}
 spec=json.loads((project/'project.json').read_text());report=[]
 for flavor,info in spec.items():
- apk=repo/f'android-distributions/{names[flavor]}.apk'
+ apk=repo/'android-distributions'/info['filename']
  cert=subprocess.check_output([str(tools/'apksigner'),'verify','--verbose','--print-certs',str(apk)],text=True)
  assert '01059a5e2a9f61d6b88aff4f2b47bc4e33195b352ba01872858f71fd358ffb1e' in cert
  badging=subprocess.check_output([str(tools/'aapt'),'dump','badging',str(apk)],text=True)
- assert f"package: name='{info['package']}' versionCode='1'" in badging
+ assert f"package: name='{info['package']}' versionCode='{info['versionCode']}'" in badging
  assert "sdkVersion:'26'" in badging and "targetSdkVersion:'36'" in badging
  assert 'android.permission.INTERNET' not in badging
  resources=subprocess.check_output([str(tools/'aapt'),'dump','--values','resources',str(apk)],text=True)
@@ -27,8 +27,10 @@ for flavor,info in spec.items():
   assert len({p['id'] for p in catalog})==len(catalog)
   assert len({p['programId'] for p in catalog})==len(catalog)
   for p in catalog:assert len(p['programId'])==32
-  if flavor=='creditChess':assert archive.read('assets/site/credit-chess/stockfish/vendor/stockfish-18-lite-single.wasm')[:4]==b'\0asm'
- row=dict(file=str(apk.relative_to(repo)),package=info['package'],versionCode=1,bytes=apk.stat().st_size,sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),programs=len(catalog),originalAssets=len(digests))
+  assert archive.read(f"assets/site/credit-chess/{info['source']}/vendor/stockfish-{info['engine']}-lite-single.wasm")[:4]==b'\0asm'
+  assert catalog[0]['id']==info['originId']
+  assert catalog[0]['path']==f"credit-chess/{info['source']}/index.html"
+ row=dict(file=str(apk.relative_to(repo)),package=info['package'],versionCode=info['versionCode'],engine=info['engine'],bytes=apk.stat().st_size,sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),programs=len(catalog),originalAssets=len(digests))
  report.append(row);print(json.dumps(row))
 (repo/'android-distributions/checksums.json').write_text(json.dumps(report,indent=2)+'\n')
 print('PASS: signed debug APKs; unique IDs; API 26–36; normal system bars; offline configuration; all original assets unchanged')

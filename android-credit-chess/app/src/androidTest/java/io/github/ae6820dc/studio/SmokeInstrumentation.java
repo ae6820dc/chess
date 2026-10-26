@@ -47,8 +47,9 @@ public final class SmokeInstrumentation extends Instrumentation {
                 require(switched.await(30,TimeUnit.SECONDS),"native switch "+p.getString("id"));
                 waitFor("location.hostname==="+JSONObject.quote(p.getString("id")+".appassets.androidplatform.net")+" && document.readyState==='complete' && !!window.studioDownload");
                 require("true".equals(eval("isSecureContext")),"secure offline origin "+p.getString("id"));
-                String probe="studio.instrumentation.probe",id=p.getString("id");
+                String probe="studio.instrumentation.probe",id=getTargetContext().getPackageName();
                 if("verify".equals(arguments.getString("phase")))require(JSONObject.quote(id).equals(eval("localStorage.getItem('"+probe+"')")),"restart persistence "+id);
+                require("true".equals(eval("localStorage.getItem('"+probe+"')===null || localStorage.getItem('"+probe+"')==="+JSONObject.quote(id))),"package storage isolation "+id);
                 eval("localStorage.setItem('"+probe+"',"+JSONObject.quote(id)+")");
                 eval("delete window.studioDownload");runOnMainSync(()->web.reload());waitFor("location.hostname==="+JSONObject.quote(p.getString("id")+".appassets.androidplatform.net")+" && document.readyState==='complete' && !!window.studioDownload");
                 require(JSONObject.quote(id).equals(eval("localStorage.getItem('"+probe+"')")),"reload persistence "+id);
@@ -60,13 +61,16 @@ public final class SmokeInstrumentation extends Instrumentation {
                     require("true".equals(eval("document.querySelector('#error').hidden && !document.querySelector('#result').hidden")),"calculator offline worker result "+id);
                 }
                 if("chess".equals(p.getString("kind"))){
-                    eval("import(new URL('./engine.js',location.href).href).then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
+                    eval("import(new URL('./engine.js',location.href).href).then(async m=>{const a=new m.StockfishAdapter();try{const range=await a.ready;const move=await a.move({moves:[],difficulty:'MAX',milliseconds:50});window.__engineProof={range,move,name:a.engineName};}finally{a.close()}}).catch(e=>window.__engineError=String(e))");
                     waitFor("!!window.__engineProof || !!window.__engineError");
                     require("true".equals(eval("!!window.__engineProof && /^[a-h][1-8][a-h][1-8]/.test(window.__engineProof.move)")),"Stockfish WASM worker legal-format move: "+eval("JSON.stringify({proof:window.__engineProof,error:window.__engineError})"));
+                    String edition=p.getString("path").contains("stockfish-19")?"19":"18";
+                    require("true".equals(eval("window.__engineProof.name.startsWith('Stockfish "+edition+"')")),"engine UCI identity Stockfish "+edition);
                     if("verify".equals(arguments.getString("phase"))){
-                        eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=await s.readBackup();window.__chessPersisted=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped')}).catch(e=>window.__chessStateError=String(e))");
+                        eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=await s.readBackup();window.__chessPersisted=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped');const saved=JSON.parse(localStorage.getItem('studio.backup.probe'));window.__savedStateIntact=!!saved&&saved.profiles.every(p=>d.profiles.some(q=>JSON.stringify(p)===JSON.stringify(q)))&&saved.games.every(g=>d.games.some(h=>g.id===h.id&&JSON.stringify(g.moves)===JSON.stringify(h.moves)&&g.result===h.result))}).catch(e=>window.__chessStateError=String(e))");
                         waitFor("window.__chessPersisted===true || !!window.__chessStateError");
                         require("true".equals(eval("window.__chessPersisted===true")),"Credit Chess accounts and stopped Arena survive process restart");
+                        require("true".equals(eval("window.__savedStateIntact===true")),"saved profiles, balances, preferences and game moves preserved across update/restart");
                     }
                     eval("location.href=new URL('./desktop.html',location.href).href");
                     waitFor("location.pathname.endsWith('/desktop.html') && document.readyState==='complete' && !!window.studioDownload");
@@ -81,7 +85,7 @@ public final class SmokeInstrumentation extends Instrumentation {
                     eval("document.getElementById('arena-stop').click()");
                     waitFor("document.getElementById('notice').textContent.includes('Arena stopped')");
                     require(true,"Credit Chess Arena Stop");
-                    eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=s.validateBackup(await s.readBackup());window.__backupValid=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped')}).catch(e=>window.__backupError=String(e))");
+                    eval("import(new URL('./storage.js',location.href).href).then(async s=>{const d=s.validateBackup(await s.readBackup());window.__backupValid=d.profiles.length>0&&d.arenaSeries.some(x=>x.status==='stopped');localStorage.setItem('studio.backup.probe',JSON.stringify(d))}).catch(e=>window.__backupError=String(e))");
                     waitFor("window.__backupValid===true || !!window.__backupError");
                     require("true".equals(eval("window.__backupValid===true")),"Credit Chess accounts, games and Arena backup validate");
                 }
@@ -95,7 +99,7 @@ public final class SmokeInstrumentation extends Instrumentation {
                 require(bars[0],"both system bars visible "+id);require(geometry[0],"WebView between system bars "+id);
             }
             // Every marker must survive a complete second pass across origins.
-            for(JSONObject p:programs){runOnMainSync(()->{try{open.invoke(activity,p);}catch(Exception e){throw new RuntimeException(e);}});waitFor("location.hostname==="+JSONObject.quote(p.getString("id")+".appassets.androidplatform.net")+" && document.readyState==='complete' && !!window.studioDownload");require(JSONObject.quote(p.getString("id")).equals(eval("localStorage.getItem('studio.instrumentation.probe')")),"switch-back persistence "+p.getString("id"));}
+            for(JSONObject p:programs){runOnMainSync(()->{try{open.invoke(activity,p);}catch(Exception e){throw new RuntimeException(e);}});waitFor("location.hostname==="+JSONObject.quote(p.getString("id")+".appassets.androidplatform.net")+" && document.readyState==='complete' && !!window.studioDownload");require(JSONObject.quote(getTargetContext().getPackageName()).equals(eval("localStorage.getItem('studio.instrumentation.probe')")),"switch-back persistence "+p.getString("id"));}
             result.putString("stream","PASS "+checks.size()+" Android checks\n"+String.join("\n",checks)+"\n");finish(Activity.RESULT_OK,result);
         } catch(Throwable e){result.putString("stream","FAIL after "+checks.size()+" checks: "+e+"\n"+String.join("\n",checks)+"\n");finish(Activity.RESULT_CANCELED,result);}
     }

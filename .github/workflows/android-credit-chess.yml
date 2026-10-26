@@ -4,6 +4,7 @@ on:
     paths:
       - 'android-credit-chess/**'
       - 'credit-chess/stockfish/**'
+      - 'credit-chess/stockfish-19/**'
       - '.github/workflows/android-credit-chess.yml'
   workflow_dispatch:
     inputs:
@@ -72,7 +73,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Build native test packages
         working-directory: android-credit-chess
-        run: ./gradlew assembleCreditChessDebug assembleCreditChessDebugAndroidTest
+        run: ./gradlew assembleCreditChessDebug assembleCreditChess19Debug assembleCreditChessDebugAndroidTest assembleCreditChess19DebugAndroidTest
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
