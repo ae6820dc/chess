@@ -1,4 +1,6 @@
-PASS 19 Android checks
+PASS 21 Android checks
+no native Back Home Programs Backup toolbar
+opens original Desktop Tablet chooser directly
 native switch credit-chess
 secure offline origin credit-chess
 restart persistence io.github.ae6820dc.creditchess
