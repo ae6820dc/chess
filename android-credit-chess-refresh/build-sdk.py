@@ -17,9 +17,9 @@ manifest=(project/'app/src/main/AndroidManifest.xml').read_text().replace('<mani
 (out/'AndroidManifest.xml').write_text(manifest)
 assets=project/'app/build/generated/offline/creditChess'
 run(bt/'aapt2','compile','--dir',res,'-o',out/'resources.zip')
-run(bt/'aapt2','link','-I',android,'--manifest',out/'AndroidManifest.xml','--rename-manifest-package','io.github.ae6820dc.creditchess','--min-sdk-version','26','--target-sdk-version','36','--version-code','3','--version-name','1.1','-A',assets,'-o',out/'unsigned.apk',out/'resources.zip')
+run(bt/'aapt2','link','-I',android,'--manifest',out/'AndroidManifest.xml','--rename-manifest-package','io.github.ae6820dc.creditchess','--min-sdk-version','26','--target-sdk-version','36','--version-code','4','--version-name','1.2','-A',assets,'-o',out/'unsigned.apk',out/'resources.zip')
 classes=out/'classes';dex=out/'dex';classes.mkdir(exist_ok=True);dex.mkdir(exist_ok=True)
-run('javac','-source','8','-target','8','-classpath',android,'-d',classes,project/'app/src/main/java/io/github/ae6820dc/studio/MainActivity.java')
+run('javac','-source','8','-target','8','-classpath',android,'-d',classes,root/'android-credit-chess-refresh/MainActivity.java')
 run(bt/'d8','--min-api','26','--lib',android,'--output',dex,*classes.rglob('*.class'))
 def sign(unsigned,aligned,apk):
  run(bt/'zipalign','-f','-p','4',unsigned,aligned)
@@ -31,7 +31,7 @@ tm=out/'test-manifest.xml'
 tm.write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.github.ae6820dc.creditchess.test"><application android:label="Credit Chess offline tests"/><instrumentation android:name="io.github.ae6820dc.studio.SmokeInstrumentation" android:targetPackage="io.github.ae6820dc.creditchess"/></manifest>')
 run(bt/'aapt2','link','-I',android,'--manifest',tm,'--min-sdk-version','26','--target-sdk-version','36','-o',out/'test-unsigned.apk')
 tc=out/'test-classes';td=out/'test-dex';tc.mkdir(exist_ok=True);td.mkdir(exist_ok=True)
-run('javac','-source','8','-target','8','-classpath',str(android)+os.pathsep+str(classes),'-d',tc,project/'app/src/androidTest/java/io/github/ae6820dc/studio/SmokeInstrumentation.java')
+run('javac','-source','8','-target','8','-classpath',str(android)+os.pathsep+str(classes),'-d',tc,root/'android-credit-chess-refresh/SmokeInstrumentation.java')
 run(bt/'d8','--min-api','26','--lib',android,'--classpath',classes,'--output',td,*tc.rglob('*.class'))
 with zipfile.ZipFile(out/'test-unsigned.apk','a') as z:z.write(td/'classes.dex','classes.dex')
 sign(out/'test-unsigned.apk',out/'test-aligned.apk',out/'tests.apk')
