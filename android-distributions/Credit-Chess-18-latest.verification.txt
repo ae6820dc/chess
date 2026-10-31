@@ -1,0 +1,21 @@
+PASS 19 Android checks
+native switch credit-chess
+secure offline origin credit-chess
+restart persistence io.github.ae6820dc.creditchess
+package storage isolation io.github.ae6820dc.creditchess
+reload persistence io.github.ae6820dc.creditchess
+isolated state io.github.ae6820dc.creditchess
+Stockfish WASM worker legal-format move: "{\"proof\":{\"range\":{\"min\":1320,\"max\":3190},\"move\":\"e2e4\",\"name\":\"Stockfish 18 Lite WASM\"}}"
+engine UCI identity Stockfish 18
+durable upgrade fixture exists
+Credit Chess accounts and stopped Arena survive process restart
+saved profiles, balances, preferences and game moves preserved across update/restart: "identical"
+Credit Chess IndexedDB account and Arena setup
+Credit Chess Arena Pause
+Credit Chess Arena Stop
+Credit Chess accounts, games and Arena backup validate
+upgrade fixture committed to disk
+both system bars visible io.github.ae6820dc.creditchess
+WebView between system bars io.github.ae6820dc.creditchess
+switch-back persistence credit-chess
+
