@@ -22,6 +22,13 @@ source=out/'stockfish'
 net='nn-1a298aa575a0.nnue'
 download('https://tests.stockfishchess.org/api/nn/'+net,source/'src'/net)
 assert hashlib.sha256((source/'src'/net).read_bytes()).hexdigest().startswith('1a298aa575a0'),'NNUE checksum mismatch'
+# Use Stockfish's own incbin helper for the universal NNUE object to avoid a
+# 376 MiB C++ string literal. The exact network bytes and engine are unchanged.
+embed=source/'src/universal/nnue_embed.cpp'
+license_header=embed.read_text().split('*/',1)[0]+'*/\n'
+embed.write_text(license_header+'// Android APK build: memory-efficient embedding.\n#define INCBIN_SILENCE_BITCODE_WARNING\n#include "../incbin/incbin.h"\n#include "../evaluate.h"\nINCBIN(EmbeddedNNUE, EvalFileDefaultName);\n')
+net_script=source/'scripts/net.sh'
+net_script.write_text(net_script.read_text().replace('if [ "$1" = "0" ]; then','if false; then'))
 abi='x86_64' if '--test-x86' in sys.argv else 'arm64-v8a'
 arch='x86-64' if abi=='x86_64' else 'arm64-universal'
 native=out/abi/'libstockfish.so';native.parent.mkdir(exist_ok=True)
@@ -30,6 +37,7 @@ if not native.exists():
  run('make','-j2','build','COMP=ndk','ARCH='+arch,'EXTRALDFLAGS=-Wl,-z,max-page-size=16384',cwd=source/'src',env=env)
  run(ndk/'llvm-strip',source/'src/stockfish')
  shutil.copyfile(source/'src/stockfish',native)
+assert native.stat().st_size>(source/'src'/net).stat().st_size,'Native binary is missing embedded NNUE'
 # Offline web assets: copy the referenced application; replace only the Android engine and labels.
 assets=out/'assets';shutil.rmtree(assets,ignore_errors=True)
 site=assets/'site/credit-chess/stockfish';site.mkdir(parents=True)
