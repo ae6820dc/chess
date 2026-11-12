@@ -1,0 +1,31 @@
+name: Credit Chess Windows test installer
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'windows/credit-chess/**'
+      - '.github/workflows/credit-chess-windows-test.yml'
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: windows/credit-chess
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build Windows installer
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Credit-Chess-Windows-Test
+          path: windows/credit-chess/dist/*.exe
+          if-no-files-found: error
